@@ -30,9 +30,6 @@ ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
 -- Enable RLS on drivers table (if not already enabled)
 ALTER TABLE public.drivers ENABLE ROW LEVEL SECURITY;
 
--- Enable RLS on ping_notifications table (if not already enabled)
-ALTER TABLE public.ping_notifications ENABLE ROW LEVEL SECURITY;
-
 -- ============================================================================
 -- Step 2: Create missing RLS policies for proper security
 -- ============================================================================
@@ -45,12 +42,15 @@ DROP POLICY IF EXISTS "Public read access" ON public.routes;
 DROP POLICY IF EXISTS "Users can view route details" ON public.routes;
 
 -- Create comprehensive routes policies
+DROP POLICY IF EXISTS "Anyone can view active routes" ON public.routes;
 CREATE POLICY "Anyone can view active routes" ON public.routes
     FOR SELECT USING (status = 'active');
 
+DROP POLICY IF EXISTS "Authenticated users can view all routes" ON public.routes;
 CREATE POLICY "Authenticated users can view all routes" ON public.routes
     FOR SELECT USING (auth.uid() IS NOT NULL);
 
+DROP POLICY IF EXISTS "Admins can manage routes" ON public.routes;
 CREATE POLICY "Admins can manage routes" ON public.routes
     FOR ALL USING (
         EXISTS (
@@ -68,12 +68,15 @@ DROP POLICY IF EXISTS "Public read access" ON public.stops;
 DROP POLICY IF EXISTS "Users can view stops" ON public.stops;
 
 -- Create comprehensive stops policies
+DROP POLICY IF EXISTS "Anyone can view active stops" ON public.stops;
 CREATE POLICY "Anyone can view active stops" ON public.stops
     FOR SELECT USING (is_active = true);
 
+DROP POLICY IF EXISTS "Authenticated users can view all stops" ON public.stops;
 CREATE POLICY "Authenticated users can view all stops" ON public.stops
     FOR SELECT USING (auth.uid() IS NOT NULL);
 
+DROP POLICY IF EXISTS "Admins can manage stops" ON public.stops;
 CREATE POLICY "Admins can manage stops" ON public.stops
     FOR ALL USING (
         EXISTS (
@@ -90,12 +93,15 @@ CREATE POLICY "Admins can manage stops" ON public.stops
 DROP POLICY IF EXISTS "Public read access" ON public.buses;
 
 -- Create comprehensive buses policies
+DROP POLICY IF EXISTS "Anyone can view active buses" ON public.buses;
 CREATE POLICY "Anyone can view active buses" ON public.buses
     FOR SELECT USING (status = 'active');
 
+DROP POLICY IF EXISTS "Authenticated users can view all buses" ON public.buses;
 CREATE POLICY "Authenticated users can view all buses" ON public.buses
     FOR SELECT USING (auth.uid() IS NOT NULL);
 
+DROP POLICY IF EXISTS "Drivers can update their assigned bus location" ON public.buses;
 CREATE POLICY "Drivers can update their assigned bus location" ON public.buses
     FOR UPDATE USING (
         driver_id = auth.uid() AND 
@@ -105,6 +111,7 @@ CREATE POLICY "Drivers can update their assigned bus location" ON public.buses
         status = 'active'
     );
 
+DROP POLICY IF EXISTS "Admins can manage buses" ON public.buses;
 CREATE POLICY "Admins can manage buses" ON public.buses
     FOR ALL USING (
         EXISTS (
@@ -121,12 +128,15 @@ CREATE POLICY "Admins can manage buses" ON public.buses
 DROP POLICY IF EXISTS "Public read access" ON public.schedules;
 
 -- Create comprehensive schedules policies
+DROP POLICY IF EXISTS "Anyone can view active schedules" ON public.schedules;
 CREATE POLICY "Anyone can view active schedules" ON public.schedules
     FOR SELECT USING (is_active = true);
 
+DROP POLICY IF EXISTS "Authenticated users can view all schedules" ON public.schedules;
 CREATE POLICY "Authenticated users can view all schedules" ON public.schedules
     FOR SELECT USING (auth.uid() IS NOT NULL);
 
+DROP POLICY IF EXISTS "Admins can manage schedules" ON public.schedules;
 CREATE POLICY "Admins can manage schedules" ON public.schedules
     FOR ALL USING (
         EXISTS (
@@ -143,16 +153,20 @@ CREATE POLICY "Admins can manage schedules" ON public.schedules
 DROP POLICY IF EXISTS "Users can check their own rate limit" ON public.users;
 
 -- Create comprehensive users policies
+DROP POLICY IF EXISTS "Users can view own profile" ON public.users;
 CREATE POLICY "Users can view own profile" ON public.users
     FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.users;
 CREATE POLICY "Users can insert own profile" ON public.users
     FOR INSERT WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 CREATE POLICY "Users can update own profile" ON public.users
     FOR UPDATE USING (auth.uid() = id)
     WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Admins can manage all users" ON public.users;
 CREATE POLICY "Admins can manage all users" ON public.users
     FOR ALL USING (
         EXISTS (
@@ -170,12 +184,15 @@ DROP POLICY IF EXISTS "Users can insert feedback" ON public.feedback;
 DROP POLICY IF EXISTS "Users can read own feedback" ON public.feedback;
 
 -- Create comprehensive feedback policies
+DROP POLICY IF EXISTS "Authenticated users can insert feedback" ON public.feedback;
 CREATE POLICY "Authenticated users can insert feedback" ON public.feedback
     FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
+DROP POLICY IF EXISTS "Users can view own feedback" ON public.feedback;
 CREATE POLICY "Users can view own feedback" ON public.feedback
     FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Admins can view all feedback" ON public.feedback;
 CREATE POLICY "Admins can view all feedback" ON public.feedback
     FOR SELECT USING (
         EXISTS (
@@ -185,6 +202,7 @@ CREATE POLICY "Admins can view all feedback" ON public.feedback
         )
     );
 
+DROP POLICY IF EXISTS "Admins can manage feedback" ON public.feedback;
 CREATE POLICY "Admins can manage feedback" ON public.feedback
     FOR ALL USING (
         EXISTS (
@@ -201,16 +219,20 @@ CREATE POLICY "Admins can manage feedback" ON public.feedback
 DROP POLICY IF EXISTS "Public read access" ON public.drivers;
 
 -- Create comprehensive drivers policies
+DROP POLICY IF EXISTS "Anyone can view active drivers summary" ON public.drivers;
 CREATE POLICY "Anyone can view active drivers summary" ON public.drivers
     FOR SELECT USING (status = 'active');
 
+DROP POLICY IF EXISTS "Drivers can view own profile" ON public.drivers;
 CREATE POLICY "Drivers can view own profile" ON public.drivers
     FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Drivers can update own profile" ON public.drivers;
 CREATE POLICY "Drivers can update own profile" ON public.drivers
     FOR UPDATE USING (auth.uid() = id)
     WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Admins can manage drivers" ON public.drivers;
 CREATE POLICY "Admins can manage drivers" ON public.drivers
     FOR ALL USING (
         EXISTS (
@@ -305,9 +327,11 @@ CREATE TABLE IF NOT EXISTS public.bus_capacity_history (
 ALTER TABLE public.bus_capacity_history ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for bus_capacity_history
+DROP POLICY IF EXISTS "Anyone can view capacity history" ON public.bus_capacity_history;
 CREATE POLICY "Anyone can view capacity history" ON public.bus_capacity_history
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admins can manage capacity history" ON public.bus_capacity_history;
 CREATE POLICY "Admins can manage capacity history" ON public.bus_capacity_history
     FOR ALL USING (
         EXISTS (
@@ -331,12 +355,15 @@ CREATE TABLE IF NOT EXISTS public.passenger_feedback (
 ALTER TABLE public.passenger_feedback ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for passenger_feedback (same as feedback)
+DROP POLICY IF EXISTS "Authenticated users can insert passenger feedback" ON public.passenger_feedback;
 CREATE POLICY "Authenticated users can insert passenger feedback" ON public.passenger_feedback
     FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
+DROP POLICY IF EXISTS "Users can view own passenger feedback" ON public.passenger_feedback;
 CREATE POLICY "Users can view own passenger feedback" ON public.passenger_feedback
     FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Admins can view all passenger feedback" ON public.passenger_feedback;
 CREATE POLICY "Admins can view all passenger feedback" ON public.passenger_feedback
     FOR SELECT USING (
         EXISTS (
@@ -346,6 +373,7 @@ CREATE POLICY "Admins can view all passenger feedback" ON public.passenger_feedb
         )
     );
 
+DROP POLICY IF EXISTS "Admins can manage passenger feedback" ON public.passenger_feedback;
 CREATE POLICY "Admins can manage passenger feedback" ON public.passenger_feedback
     FOR ALL USING (
         EXISTS (

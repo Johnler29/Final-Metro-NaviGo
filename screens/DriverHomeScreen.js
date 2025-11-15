@@ -10,7 +10,6 @@ import {
   Pressable,
   ActivityIndicator,
   Modal,
-  Vibration,
 } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,7 +18,8 @@ import { useSupabase } from '../contexts/SupabaseContext';
 import { useDrawer } from '../contexts/DrawerContext';
 import CapacityStatusModal from '../components/CapacityStatusModal';
 import AlarmModal from '../components/AlarmModal';
-import { supabase, supabaseHelpers } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
+import { Vibration } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -43,10 +43,10 @@ export default function DriverHomeScreen({ navigation }) {
   const [currentCapacity, setCurrentCapacity] = useState(0);
   const [currentBus, setCurrentBus] = useState(null);
   const [currentDriver, setCurrentDriver] = useState(null);
+  const [showAlarmModal, setShowAlarmModal] = useState(false);
   const [pingNotifications, setPingNotifications] = useState([]);
   const [showPingModal, setShowPingModal] = useState(false);
   const [unreadPingCount, setUnreadPingCount] = useState(0);
-  const [showAlarmModal, setShowAlarmModal] = useState(false);
 
   // Get data from Supabase context
   const { 
@@ -70,7 +70,10 @@ export default function DriverHomeScreen({ navigation }) {
     getBusCapacityStatus,
     startDriverSession,
     endDriverSession,
-    updateBusLocation
+    updateBusLocation,
+    getBusPingNotifications,
+    acknowledgePing,
+    completePing
   } = useSupabase();
 
   // Get drawer context
@@ -237,7 +240,7 @@ export default function DriverHomeScreen({ navigation }) {
 
     // Subscribe to real-time updates
     const channel = supabase
-      .channel('ping-notifications')
+      .channel(`ping-notifications-${currentBus.id}`)
       .on(
         'postgres_changes',
         {
@@ -247,15 +250,15 @@ export default function DriverHomeScreen({ navigation }) {
           filter: `bus_id=eq.${currentBus.id}`
         },
         (payload) => {
-          console.log('Ping notification change:', payload);
+          console.log('🔔 Ping notification change:', payload);
           loadPingNotifications();
           
           // Vibrate and alert on new ping
           if (payload.eventType === 'INSERT') {
             Vibration.vibrate([0, 200, 100, 200]);
             Alert.alert(
-              '🔔 New Ping!',
-              'You have received a new passenger notification',
+              '🔔 New Passenger Ping!',
+              'A passenger has sent you a notification',
               [
                 { text: 'View', onPress: () => setShowPingModal(true) },
                 { text: 'Later', style: 'cancel' }
@@ -275,7 +278,7 @@ export default function DriverHomeScreen({ navigation }) {
     if (!currentBus?.id) return;
 
     try {
-      const result = await supabaseHelpers.getBusPingNotifications(currentBus.id);
+      const result = await getBusPingNotifications(currentBus.id);
       if (result.success && result.data) {
         setPingNotifications(result.data);
         const unreadCount = result.data.filter(p => p.status === 'pending').length;
@@ -288,10 +291,12 @@ export default function DriverHomeScreen({ navigation }) {
 
   const handleAcknowledgePing = async (pingId) => {
     try {
-      const result = await supabaseHelpers.acknowledgePing(pingId);
+      const result = await acknowledgePing(pingId);
       if (result.success) {
-        loadPingNotifications();
+        await loadPingNotifications();
         Alert.alert('Success', 'Ping acknowledged!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to acknowledge ping');
       }
     } catch (error) {
       console.error('Error acknowledging ping:', error);
@@ -301,10 +306,12 @@ export default function DriverHomeScreen({ navigation }) {
 
   const handleCompletePing = async (pingId) => {
     try {
-      const result = await supabaseHelpers.completePing(pingId);
+      const result = await completePing(pingId);
       if (result.success) {
-        loadPingNotifications();
+        await loadPingNotifications();
         Alert.alert('Success', 'Ping completed!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to complete ping');
       }
     } catch (error) {
       console.error('Error completing ping:', error);
@@ -715,7 +722,10 @@ export default function DriverHomeScreen({ navigation }) {
             <Text style={styles.headerSubtitle}>Metro NaviGo Driver</Text>
           </View>
           <View style={styles.headerRightButtons}>
-            <TouchableOpacity style={styles.pingButton} onPress={() => setShowPingModal(true)}>
+            <TouchableOpacity 
+              style={styles.pingButton} 
+              onPress={() => setShowPingModal(true)}
+            >
               <Ionicons name="notifications" size={24} color="#fff" />
               {unreadPingCount > 0 && (
                 <View style={styles.pingBadge}>
@@ -986,15 +996,6 @@ export default function DriverHomeScreen({ navigation }) {
         busInfo={currentBus}
       />
 
-      {/* Alarm Modal */}
-      <AlarmModal
-        visible={showAlarmModal}
-        onClose={() => setShowAlarmModal(false)}
-        userType="driver"
-        driverId={currentDriver?.id}
-        busId={currentBus?.id}
-      />
-
       {/* Ping Notifications Modal */}
       <Modal
         visible={showPingModal}
@@ -1012,7 +1013,11 @@ export default function DriverHomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
           
-          <ScrollView style={styles.modalContent}>
+          <ScrollView 
+            style={styles.modalContent}
+            contentContainerStyle={styles.modalContentContainer}
+            showsVerticalScrollIndicator={true}
+          >
             {pingNotifications.length === 0 ? (
               <View style={styles.emptyPingContainer}>
                 <Ionicons name="notifications-off" size={64} color="#D1D5DB" />
@@ -1027,7 +1032,7 @@ export default function DriverHomeScreen({ navigation }) {
                       <Ionicons name="person-circle" size={40} color="#f59e0b" />
                       <View style={{ marginLeft: 12 }}>
                         <Text style={styles.pingUserName}>
-                          {ping.users?.first_name || 'Passenger'} {ping.users?.last_name || ''}
+                          {ping.user_name || 'Passenger'}
                         </Text>
                         <Text style={styles.pingTime}>
                           {new Date(ping.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1127,6 +1132,15 @@ export default function DriverHomeScreen({ navigation }) {
           </ScrollView>
         </View>
       </Modal>
+
+      <AlarmModal
+        visible={showAlarmModal}
+        onClose={() => setShowAlarmModal(false)}
+        userType="driver"
+        driverId={currentDriver?.id}
+        busId={currentBus?.id}
+      />
+
     </View>
   );
 }
@@ -1146,8 +1160,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 12,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
   },
   headerRow: {
     flexDirection: 'row',
@@ -1184,33 +1196,6 @@ const styles = StyleSheet.create({
   headerRightButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  pingButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  pingBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: '#EF4444',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#f59e0b',
-  },
-  pingBadgeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
   },
   profileButton: {
     width: 44,
@@ -1706,7 +1691,10 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     flex: 1,
+  },
+  modalContentContainer: {
     padding: 24,
+    paddingBottom: 40,
   },
   passengerCounter: {
     backgroundColor: '#FFFFFF',
@@ -1793,6 +1781,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
+    position: 'relative',
   },
   pingBadge: {
     position: 'absolute',
@@ -1837,7 +1827,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
-    marginHorizontal: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     shadowColor: '#000',
@@ -1932,5 +1921,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+    marginLeft: 6,
   },
 }); 

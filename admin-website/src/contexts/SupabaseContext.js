@@ -733,52 +733,6 @@ export const SupabaseProvider = ({ children }) => {
     }
   };
 
-  // Ping Notifications
-  const getPingNotifications = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('ping_notifications')
-        .select(`
-          *,
-          users:user_id(first_name, last_name, email, phone),
-          buses:bus_id(bus_number, name, route_id)
-        `)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error fetching ping notifications:', error);
-      return [];
-    }
-  };
-
-  const acknowledgePing = async (pingId) => {
-    try {
-      const { data, error } = await supabase
-        .rpc('acknowledge_ping_notification', { ping_id: pingId });
-      
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error acknowledging ping:', error);
-      return false;
-    }
-  };
-
-  const completePing = async (pingId) => {
-    try {
-      const { data, error } = await supabase
-        .rpc('complete_ping_notification', { ping_id: pingId });
-      
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error completing ping:', error);
-      return false;
-    }
-  };
-
   // Sync driver-bus assignments for existing buses
   const syncDriverBusAssignments = async () => {
     try {
@@ -912,9 +866,6 @@ export const SupabaseProvider = ({ children }) => {
     deleteDriver,
     updateBusLocation,
     getAnalytics,
-    getPingNotifications,
-    acknowledgePing,
-    completePing,
     syncDriverBusAssignments,
     createDriverAccount,
     getUserStatistics,

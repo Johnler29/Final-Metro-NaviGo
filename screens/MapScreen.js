@@ -7,7 +7,6 @@ import {
   Alert,
   Dimensions,
   ActivityIndicator,
-  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 // MapView now handled by RealtimeBusMap component
@@ -17,9 +16,9 @@ import { useSupabase } from '../contexts/SupabaseContext';
 import { supabaseHelpers } from '../lib/supabase';
 import RealtimeBusMap from '../components/RealtimeBusMap';
 import RealtimeTest from '../components/RealtimeTest';
-import AlarmModal from '../components/AlarmModal';
 import SetAlarmModal from '../components/SetAlarmModal';
 import RouteInfoPanel from '../components/RouteInfoPanel';
+import PingModal from '../components/PingModal';
 import { getLocationStatus, getCapacityStatus, formatDistance, formatTime } from '../utils/locationUtils';
 import { getAllRoutes, getRouteById } from '../data/routes';
 
@@ -32,24 +31,18 @@ export default function MapScreen({ navigation, route }) {
   const [selectedBusId, setSelectedBusId] = useState(route?.params?.selectedBusId || null);
   const [trackingBus, setTrackingBus] = useState(null);
   const [showTrackModal, setShowTrackModal] = useState(false);
-  const [showPingModal, setShowPingModal] = useState(false);
-  const [pingMessage, setPingMessage] = useState('');
-  const [pingType, setPingType] = useState('ride_request');
-  const [pingCooldown, setPingCooldown] = useState(0);
-  const [pingsRemaining, setPingsRemaining] = useState(50);
-  const [isPingBlocked, setIsPingBlocked] = useState(false);
   // Always use real-time mode - no manual mode needed
   const [arrivalTimes, setArrivalTimes] = useState({});
   // Route selection state
   const [availableRoutes, setAvailableRoutes] = useState([]);
   const [selectedRouteId, setSelectedRouteId] = useState(null);
   const [showRouteSelector, setShowRouteSelector] = useState(false);
-  const [showAlarmModal, setShowAlarmModal] = useState(false);
-  const [selectedBusForAlarm, setSelectedBusForAlarm] = useState(null);
   const [showSetAlarmModal, setShowSetAlarmModal] = useState(false);
   // Route planner state
   const [showRouteInfoPanel, setShowRouteInfoPanel] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState(null);
+  // Ping modal state
+  const [showPingModal, setShowPingModal] = useState(false);
   
   // Debug selected bus ID
   useEffect(() => {
@@ -379,122 +372,6 @@ export default function MapScreen({ navigation, route }) {
     setShowTrackModal(false);
   };
 
-  // Load ping status on mount
-  useEffect(() => {
-    loadPingStatus();
-  }, []);
-
-  // Cooldown timer
-  useEffect(() => {
-    if (pingCooldown > 0) {
-      const timer = setTimeout(() => {
-        setPingCooldown(pingCooldown - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [pingCooldown]);
-
-  const loadPingStatus = async () => {
-    try {
-      const result = await supabaseHelpers.getUserPingStatus();
-      if (result.success && result.data) {
-        setPingsRemaining(result.data.pings_remaining || 50);
-        setPingCooldown(result.data.cooldown_remaining || 0);
-        setIsPingBlocked(result.data.is_blocked || false);
-      }
-    } catch (error) {
-      console.error('Error loading ping status:', error);
-    }
-  };
-
-  const pingBus = async () => {
-    if (!selectedBusId) {
-      Alert.alert('Error', 'Please select a bus first');
-      return;
-    }
-
-    // Check if blocked
-    if (isPingBlocked) {
-      Alert.alert(
-        'Temporarily Blocked',
-        'You are temporarily blocked from sending pings due to spam detection. Please try again later.'
-      );
-      return;
-    }
-
-    // Check cooldown
-    if (pingCooldown > 0) {
-      Alert.alert(
-        'Cooldown Active',
-        `Please wait ${pingCooldown} seconds before sending another ping.`
-      );
-      return;
-    }
-
-    try {
-      const selectedBus = mapBuses.find(bus => bus.id === selectedBusId);
-      if (!selectedBus) {
-        Alert.alert('Error', 'Selected bus not found');
-        return;
-      }
-
-      const result = await supabaseHelpers.pingBus(
-        selectedBusId,
-        pingType,
-        pingMessage,
-        {
-          latitude: location?.latitude,
-          longitude: location?.longitude,
-          address: 'Current Location'
-        }
-      );
-
-      if (result.success) {
-        Alert.alert(
-          'Ping Sent!', 
-          `Your message has been sent to Bus ${selectedBus.route_number}. The driver will be notified.\n\nPings remaining today: ${result.remainingToday || pingsRemaining - 1}`,
-          [{ text: 'OK', onPress: () => {
-            setShowPingModal(false);
-            setPingCooldown(30); // 30 second cooldown
-            setPingsRemaining(result.remainingToday || pingsRemaining - 1);
-          }}]
-        );
-        setPingMessage('');
-      } else {
-        // Handle different error types
-        if (result.reason === 'cooldown') {
-          setPingCooldown(result.cooldownRemaining || 30);
-          Alert.alert(
-            'Cooldown Active',
-            `Please wait ${result.cooldownRemaining} seconds before sending another ping.`
-          );
-        } else if (result.reason === 'daily_limit') {
-          setIsPingBlocked(true);
-          Alert.alert(
-            'Daily Limit Reached',
-            'You have reached the daily ping limit (50 pings per day). Try again tomorrow.'
-          );
-        } else if (result.reason === 'spam_detected') {
-          setIsPingBlocked(true);
-          Alert.alert(
-            'Spam Detected',
-            'Too many pings sent in a short time. You are temporarily blocked for 1 hour.'
-          );
-        } else if (result.reason === 'blocked') {
-          setIsPingBlocked(true);
-          Alert.alert(
-            'Temporarily Blocked',
-            result.error || 'You are temporarily blocked from sending pings.'
-          );
-        } else {
-          Alert.alert('Error', result.error || 'Failed to send ping');
-        }
-      }
-    } catch (error) {
-      console.error('Error pinging bus:', error);
-      Alert.alert('Error', 'Failed to send ping. Please try again.');
-    }
-  };
 
   if (isLoading) {
     return (
@@ -661,19 +538,8 @@ export default function MapScreen({ navigation, route }) {
                 style={styles.pingButton}
                 onPress={() => setShowPingModal(true)}
               >
-                <Ionicons name="notifications" size={14} color="#fff" />
+                <Ionicons name="notifications-outline" size={16} color="#007AFF" />
                 <Text style={styles.pingButtonText}>Ping</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.alarmButton}
-                onPress={() => {
-                  const selectedBus = mapBuses.find(bus => bus.id === selectedBusId);
-                  setSelectedBusForAlarm(selectedBus);
-                  setShowAlarmModal(true);
-                }}
-              >
-                <Ionicons name="warning" size={14} color="#fff" />
-                <Text style={styles.alarmButtonText}>Alarm</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.stopTrackingButton}
@@ -804,120 +670,24 @@ export default function MapScreen({ navigation, route }) {
         </View>
       )}
 
-      {/* Ping Bus Modal */}
-      {showPingModal && selectedBusId && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.pingModal}>
-            <View style={styles.pingModalHeader}>
-              <Text style={styles.pingModalTitle}>Ping Bus</Text>
-              <TouchableOpacity 
-                style={styles.pingCloseButton}
-                onPress={() => setShowPingModal(false)}
-              >
-                <Ionicons name="close" size={20} color="#666" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.pingContent}>
-              <Text style={styles.pingSubtitle}>
-                Send a message to Bus {mapBuses.find(bus => bus.id === selectedBusId)?.route_number || 'Unknown'}
-              </Text>
-
-              {/* Rate Limit Info */}
-              <View style={styles.pingStatusBar}>
-                <View style={styles.pingStatusItem}>
-                  <Ionicons name="hourglass" size={16} color={pingCooldown > 0 ? '#EF4444' : '#10B981'} />
-                  <Text style={[styles.pingStatusText, { color: pingCooldown > 0 ? '#EF4444' : '#10B981' }]}>
-                    {pingCooldown > 0 ? `Cooldown: ${pingCooldown}s` : 'Ready'}
-                  </Text>
-                </View>
-                <View style={styles.pingStatusItem}>
-                  <Ionicons name="today" size={16} color="#6B7280" />
-                  <Text style={styles.pingStatusText}>
-                    {pingsRemaining}/50 left today
-                  </Text>
-                </View>
-              </View>
-
-              {isPingBlocked && (
-                <View style={styles.blockedBanner}>
-                  <Ionicons name="alert-circle" size={20} color="#DC2626" />
-                  <Text style={styles.blockedText}>
-                    You are temporarily blocked from sending pings
-                  </Text>
-                </View>
-              )}
-              
-              <View style={styles.pingTypeContainer}>
-                <Text style={styles.pingLabel}>Message Type:</Text>
-                <View style={styles.pingTypeButtons}>
-                  <TouchableOpacity 
-                    style={[styles.pingTypeButton, pingType === 'ride_request' && styles.pingTypeButtonActive]}
-                    onPress={() => setPingType('ride_request')}
-                  >
-                    <Text style={[styles.pingTypeButtonText, pingType === 'ride_request' && styles.pingTypeButtonTextActive]}>
-                      Ride Request
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.pingTypeButton, pingType === 'eta_request' && styles.pingTypeButtonActive]}
-                    onPress={() => setPingType('eta_request')}
-                  >
-                    <Text style={[styles.pingTypeButtonText, pingType === 'eta_request' && styles.pingTypeButtonTextActive]}>
-                      ETA Request
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-              
-              <View style={styles.messageContainer}>
-                <Text style={styles.pingLabel}>Message (Optional):</Text>
-                <TextInput
-                  style={styles.messageInput}
-                  placeholder="e.g., I need to catch this bus at the next stop"
-                  value={pingMessage}
-                  onChangeText={setPingMessage}
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
-              
-              <TouchableOpacity 
-                style={[
-                  styles.pingSendButton,
-                  (pingCooldown > 0 || isPingBlocked) && styles.pingSendButtonDisabled
-                ]}
-                onPress={pingBus}
-                disabled={pingCooldown > 0 || isPingBlocked}
-              >
-                <Ionicons name="send" size={20} color="#fff" />
-                <Text style={styles.pingSendButtonText}>
-                  {pingCooldown > 0 ? `Wait ${pingCooldown}s` : isPingBlocked ? 'Blocked' : 'Send Ping'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Alarm Modal */}
-      <AlarmModal
-        visible={showAlarmModal}
-        onClose={() => {
-          setShowAlarmModal(false);
-          setSelectedBusForAlarm(null);
-        }}
-        userType="passenger"
-        busId={selectedBusForAlarm?.id}
-      />
-
       {/* Set Alarm Modal */}
       <SetAlarmModal
         visible={showSetAlarmModal}
         onClose={() => setShowSetAlarmModal(false)}
         userType="passenger"
-        selectedBus={selectedBusForAlarm}
+        selectedBus={mapBuses.find(bus => bus.id === selectedBusId) || null}
       />
+
+      {/* Ping Modal */}
+      {selectedBusId && (
+        <PingModal
+          visible={showPingModal}
+          onClose={() => setShowPingModal(false)}
+          busId={selectedBusId}
+          busNumber={mapBuses.find(bus => bus.id === selectedBusId)?.route_number}
+          routeNumber={mapBuses.find(bus => bus.id === selectedBusId)?.route_number}
+        />
+      )}
     </View>
   );
 }
@@ -938,8 +708,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 12,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
   },
   backButton: { 
     width: 44, 
@@ -1366,258 +1134,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-
-  // Ping Modal Styles - ENHANCED DESIGN
-  pingModal: {
-    backgroundColor: '#fff',
-    borderRadius: 32,
-    padding: 0,
-    width: '88%',
-    position: 'absolute',
-    top: '50%',
-    left: '6%',
-    right: '6%',
-    transform: [{ translateY: -250 }],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.12,
-    shadowRadius: 32,
-    elevation: 20,
-    borderWidth: 0,
-    overflow: 'hidden'
-  },
-  pingModalHeader: {
+  pingButton: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245, 158, 11, 0.1)',
-    backgroundColor: '#fffbeb',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginRight: 8,
   },
-  pingModalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#f59e0b',
-    letterSpacing: -0.5
-  },
-  pingCloseButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.1)',
-  },
-  pingContent: {
-    padding: 24,
-    paddingBottom: 28,
-  },
-  pingSubtitle: {
-    fontSize: 14,
-    color: '#4B5563',
-    marginBottom: 16,
-    textAlign: 'center',
-    fontWeight: '500',
-    letterSpacing: -0.2,
-  },
-  pingTypeContainer: {
-    marginBottom: 14,
-  },
-  pingLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 10,
-    letterSpacing: -0.2,
-  },
-  pingTypeButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  pingTypeButton: {
-    flex: 1,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  pingTypeButtonActive: {
-    backgroundColor: '#f59e0b',
-    borderColor: '#f59e0b',
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8
-  },
-  pingTypeButtonText: {
-    fontSize: 13,
+  pingButtonText: {
+    marginLeft: 4,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#666',
-  },
-  pingTypeButtonTextActive: {
-    color: '#fff',
-  },
-  messageContainer: {
-    marginBottom: 16,
-  },
-  messageInput: {
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    borderRadius: 18,
-    padding: 15,
-    fontSize: 14,
-    textAlignVertical: 'top',
-    minHeight: 65,
-    backgroundColor: '#f9fafb',
-    fontFamily: 'System',
-    fontWeight: '500',
-    color: '#1F2937',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  pingSendButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f59e0b',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 22,
-    gap: 10,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 12,
-    borderWidth: 0,
-  },
-  pingSendButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0.3
+    color: '#007AFF',
   },
   busActionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  pingButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#10b981',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 14,
-    marginRight: 8,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  pingButtonText: {
-    marginLeft: 6,
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: 0.2
-  },
-  alarmButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 14,
-    marginRight: 8,
-    shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  alarmButtonText: {
-    marginLeft: 6,
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: 0.2
-  },
-  pingSendButtonDisabled: {
-    backgroundColor: '#D1D5DB',
-    opacity: 0.7,
-    shadowOpacity: 0.2,
-  },
-  pingStatusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 14,
-    marginBottom: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  pingStatusItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
-  },
-  pingStatusText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4B5563',
-    letterSpacing: -0.1,
-  },
-  blockedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    marginBottom: 18,
-    gap: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#DC2626',
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  blockedText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#DC2626',
   },
 }); 

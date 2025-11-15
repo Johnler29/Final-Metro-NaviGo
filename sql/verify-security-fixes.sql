@@ -165,7 +165,6 @@ Security Status should show:
 - users: ✅ Secure
 - feedback: ✅ Secure
 - drivers: ✅ Secure
-- ping_notifications: ✅ Secure
 - bus_capacity_history: ✅ Secure
 - passenger_feedback: ✅ Secure
 */

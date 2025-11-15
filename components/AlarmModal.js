@@ -18,7 +18,7 @@ const AlarmModal = ({ visible, onClose, userType = 'passenger', driverId = null,
   const [message, setMessage] = useState('');
   const [priority, setPriority] = useState('medium');
   const [loading, setLoading] = useState(false);
-  const { reportEmergency, pingBus } = useSupabase();
+  const { reportEmergency } = useSupabase();
 
   const alarmTypes = [
     {
@@ -99,19 +99,12 @@ const AlarmModal = ({ visible, onClose, userType = 'passenger', driverId = null,
           'Your emergency report has been sent to the control center.',
           [{ text: 'OK', onPress: onClose }]
         );
-      } else if (userType === 'passenger' && busId) {
-        // Passenger pinging bus with alarm
-        const pingResult = await pingBus(busId, 'emergency', message.trim());
-        
-        if (pingResult.success) {
-          Alert.alert(
-            'Alarm Sent',
-            'Your alarm has been sent to the driver and control center.',
-            [{ text: 'OK', onPress: onClose }]
-          );
-        } else {
-          Alert.alert('Error', pingResult.error || 'Failed to send alarm');
-        }
+      } else if (userType === 'passenger') {
+        Alert.alert(
+          'Unavailable',
+          'Passenger alarm notifications are no longer supported.'
+        );
+        onClose();
       }
 
       // Reset form

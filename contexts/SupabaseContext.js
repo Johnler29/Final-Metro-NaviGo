@@ -493,6 +493,61 @@ export const SupabaseProvider = ({ children }) => {
     }
   };
 
+  // Ping Bus Notifications
+  const pingBus = async (busId, pingType = 'ride_request', message = '', location = null) => {
+    try {
+      return await supabaseHelpers.pingBus(busId, pingType, message, location);
+    } catch (err) {
+      console.error('Error pinging bus:', err);
+      throw err;
+    }
+  };
+
+  const getUserPingStatus = async () => {
+    try {
+      return await supabaseHelpers.getUserPingStatus();
+    } catch (err) {
+      console.error('Error getting user ping status:', err);
+      throw err;
+    }
+  };
+
+  const getUserPingNotifications = async () => {
+    try {
+      return await supabaseHelpers.getUserPingNotifications();
+    } catch (err) {
+      console.error('Error getting user ping notifications:', err);
+      throw err;
+    }
+  };
+
+  const getBusPingNotifications = async (busId) => {
+    try {
+      return await supabaseHelpers.getBusPingNotifications(busId);
+    } catch (err) {
+      console.error('Error getting bus ping notifications:', err);
+      throw err;
+    }
+  };
+
+  const acknowledgePing = async (pingId) => {
+    try {
+      return await supabaseHelpers.acknowledgePing(pingId);
+    } catch (err) {
+      console.error('Error acknowledging ping:', err);
+      throw err;
+    }
+  };
+
+  const completePing = async (pingId) => {
+    try {
+      return await supabaseHelpers.completePing(pingId);
+    } catch (err) {
+      console.error('Error completing ping:', err);
+      throw err;
+    }
+  };
+
   const value = {
     // Supabase client
     supabase,
@@ -536,7 +591,14 @@ export const SupabaseProvider = ({ children }) => {
     startDriverSession,
     endDriverSession,
     refreshData,
-    refreshDriverData
+    refreshDriverData,
+    // Ping functions
+    pingBus,
+    getUserPingStatus,
+    getUserPingNotifications,
+    getBusPingNotifications,
+    acknowledgePing,
+    completePing
   };
 
   return (

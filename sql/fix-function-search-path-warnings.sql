@@ -151,8 +151,6 @@ BEGIN
   
   -- Unblock user
   UPDATE users SET
-    is_ping_blocked = false,
-    ping_block_until = NULL,
     updated_at = NOW()
   WHERE id = user_id;
   

@@ -320,11 +320,6 @@ export default function HomeScreen({ navigation }) {
             </Text>
           </View>
           
-          <View style={styles.userInfo}>
-            <Text style={styles.greeting}>{getGreeting()}</Text>
-            <Text style={styles.username}>Johnler De Asis</Text>
-          </View>
-          
           <TouchableOpacity style={styles.profileButton} onPress={handleProfilePress}>
             <Ionicons name="person-circle" size={28} color="#fff" />
           </TouchableOpacity>
@@ -688,8 +683,6 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 12,
     position: 'relative',
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
   },
   headerRow: {
     flexDirection: 'row',
@@ -722,25 +715,6 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     fontFamily: 'System',
     fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  userInfo: {
-    alignItems: 'flex-end',
-    flex: 1,
-  },
-  greeting: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 13,
-    fontFamily: 'System',
-    fontWeight: '400',
-    marginBottom: 2,
-    letterSpacing: 0.2,
-  },
-  username: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    fontFamily: 'System',
     letterSpacing: 0.3,
   },
   profileButton: {
