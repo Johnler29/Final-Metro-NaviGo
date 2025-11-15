@@ -52,6 +52,7 @@ export default function DriverHomeScreen({ navigation }) {
 
   // Get data from Supabase context
   const { 
+    supabase,
     buses, 
     routes, 
     drivers, 
@@ -687,6 +688,24 @@ export default function DriverHomeScreen({ navigation }) {
               // Update driver status (continue even if this fails due to RLS/columns)
               if (currentDriver?.id) {
                 try { await updateDriverStatus(currentDriver.id, 'inactive'); } catch (e) { console.warn('updateDriverStatus failed:', e?.message || e); }
+              }
+
+              // Hard enforce bus offline in DB so status can't stay 'active'
+              if (supabase && currentBus?.id) {
+                try {
+                  await supabase
+                    .from('buses')
+                    .update({
+                      status: 'inactive',
+                      tracking_status: 'stopped',
+                      driver_id: null,
+                      updated_at: new Date().toISOString(),
+                      last_location_update: new Date().toISOString(),
+                    })
+                    .eq('id', currentBus.id);
+                } catch (e) {
+                  console.warn('force bus offline failed:', e?.message || e);
+                }
               }
 
               Alert.alert('Off Duty', 'You are now off duty. Location tracking has stopped.');

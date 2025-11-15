@@ -19,7 +19,6 @@ export default function BusListScreen({ navigation, route }) {
   const [selectedFilter, setSelectedFilter] = useState(route.params?.filter || 'all');
   const [busCapacityStatus, setBusCapacityStatus] = useState({});
   const [realtimeBuses, setRealtimeBuses] = useState([]);
-  const [useRealtime, setUseRealtime] = useState(true);
 
   // Get data from Supabase context
   const { 
@@ -72,10 +71,8 @@ export default function BusListScreen({ navigation, route }) {
 
   // Load real-time data on mount and when refreshing
   useEffect(() => {
-    if (useRealtime) {
-      loadRealtimeBuses();
-    }
-  }, [useRealtime, refreshing]);
+    loadRealtimeBuses();
+  }, [refreshing]);
 
   const loadCapacityStatus = async () => {
     try {
@@ -122,9 +119,7 @@ export default function BusListScreen({ navigation, route }) {
     try {
       await refreshData();
       await loadCapacityStatus();
-      if (useRealtime) {
-        await loadRealtimeBuses();
-      }
+      await loadRealtimeBuses();
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
@@ -192,7 +187,7 @@ export default function BusListScreen({ navigation, route }) {
     const capacityData = busCapacityStatus[bus.id];
     
     // Use real-time data if available, otherwise fall back to regular data
-    const isRealtime = useRealtime && realtimeBuses.length > 0;
+    const isRealtime = realtimeBuses.length > 0;
     const busData = isRealtime ? realtimeBuses.find(rb => rb.bus_id === bus.id) || bus : bus;
     
     const locationStatus = getLocationStatus(busData.last_location_update || bus.updated_at);
@@ -406,24 +401,12 @@ export default function BusListScreen({ navigation, route }) {
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {useRealtime ? 'Real-Time Buses' : 'Available Buses'}
-          </Text>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity 
-              style={[styles.realtimeButton, useRealtime && styles.realtimeButtonActive]} 
-              onPress={() => setUseRealtime(!useRealtime)}
-            >
-              <Ionicons 
-                name={useRealtime ? "radio" : "radio-outline"} 
-                size={20} 
-                color={useRealtime ? "#fff" : "#f59e0b"} 
-              />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-              <Ionicons name="menu" size={24} color="#fff" />
-            </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Available Buses</Text>
           </View>
+          <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
+            <Ionicons name="menu" size={24} color="#fff" />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -481,31 +464,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 48,
   },
-  headerButtons: {
-    flexDirection: 'row',
+  headerTitleContainer: {
+    flex: 1,
     alignItems: 'center',
-  },
-  realtimeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  realtimeButtonActive: {
-    backgroundColor: '#fff',
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
   },
   backButton: {
     width: 44,

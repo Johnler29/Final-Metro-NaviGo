@@ -531,15 +531,15 @@ export default function DriverMapScreen({ navigation, route }) {
     }
     
     return location ? {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
-    } : {
-      latitude: 40.7128,
-      longitude: -74.0060,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
+    latitude: location.coords.latitude,
+    longitude: location.coords.longitude,
+    latitudeDelta: 0.01,
+    longitudeDelta: 0.01,
+  } : {
+    latitude: 40.7128,
+    longitude: -74.0060,
+    latitudeDelta: 0.01,
+    longitudeDelta: 0.01,
     };
   };
 
