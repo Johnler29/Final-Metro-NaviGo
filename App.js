@@ -32,6 +32,7 @@ import DriverMaintenanceScreen from './screens/DriverMaintenanceScreen';
 // Import additional screens
 import SettingsScreen from './screens/SettingsScreen';
 import HelpScreen from './screens/HelpScreen';
+import ProfileScreen from './screens/ProfileScreen';
 
 // Import simple drawer
 import SimpleDrawer from './components/SimpleDrawer';
@@ -229,7 +230,7 @@ function AppTestHarness() {
 }
 
 // Passenger Tab Navigator
-function PassengerTabNavigator() {
+function PassengerTabNavigator({ navigation }) {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -289,7 +290,7 @@ function PassengerTabNavigator() {
       />
       <Tab.Screen 
         name="Profile" 
-        component={SettingsScreen}
+        component={ProfileScreen}
         options={{
           tabBarLabel: 'Profile',
         }}
@@ -486,7 +487,11 @@ function AppContent() {
           
           {/* Main Navigation */}
           {currentRole === 'passenger' ? (
-            <PassengerTabNavigator />
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="PassengerTabs" component={PassengerTabNavigator} />
+              <Stack.Screen name="Settings" component={SettingsScreen} />
+              <Stack.Screen name="Help" component={HelpScreen} />
+            </Stack.Navigator>
           ) : (
             <DriverTabNavigator />
           )}

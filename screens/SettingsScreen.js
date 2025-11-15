@@ -18,8 +18,8 @@ export default function SettingsScreen({ navigation }) {
   const [showDataModal, setShowDataModal] = useState(false);
   const [selectedDataType, setSelectedDataType] = useState('');
 
-  const handleMenuPress = () => {
-    navigation.getParent()?.openDrawer();
+  const handleBackPress = () => {
+    navigation.goBack();
   };
 
   const testConnection = async () => {
@@ -146,10 +146,12 @@ export default function SettingsScreen({ navigation }) {
       {/* Header */}
       <View style={styles.headerContainer}>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-            <Ionicons name="menu" size={24} color="#fff" />
+          <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Settings</Text>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Settings</Text>
+          </View>
           <View style={styles.placeholder} />
         </View>
       </View>
@@ -297,12 +299,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  menuButton: {
+  backButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitleContainer: {
+    flex: 1,
     alignItems: 'center',
   },
   headerTitle: {
@@ -313,7 +319,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.8,
   },
   placeholder: {
-    width: 40,
+    width: 44,
   },
   content: {
     flex: 1,

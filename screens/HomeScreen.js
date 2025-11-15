@@ -119,7 +119,7 @@ export default function HomeScreen({ navigation }) {
   };
 
   const handleProfilePress = () => {
-    Alert.alert('Profile', 'Profile screen coming soon!');
+    navigation.navigate('Profile');
   };
 
   const handleMenuPress = () => {
