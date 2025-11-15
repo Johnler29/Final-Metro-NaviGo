@@ -11,13 +11,19 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { useSupabase } from '../contexts/SupabaseContext';
 
 export default function LoginScreen() {
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const { signIn, signUp } = useAuth();
+  const { createUser } = useSupabase();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -27,59 +33,77 @@ export default function LoginScreen() {
 
     try {
       setLoading(true);
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password,
-      });
+      const data = await signIn(email.trim(), password);
 
-      if (error) {
-        Alert.alert('Login Error', error.message);
+      if (!data || !data.user) {
+        Alert.alert('Login Error', 'Unable to log in. Please check your credentials.');
         return;
       }
 
-      if (data.user) {
-        Alert.alert('Success', 'Logged in successfully!');
-        // The app will automatically navigate to the main interface
-        // because the AuthContext will detect the user is logged in
-      }
+      Alert.alert('Success', 'Logged in successfully!');
+      // The app will automatically navigate to the main interface
+      // because the AuthContext will detect the user is logged in
     } catch (error) {
-      Alert.alert('Error', 'Login failed. Please try again.');
+      const message =
+        error?.message?.includes('Invalid login credentials') ||
+        error?.message?.includes('invalid login credentials')
+          ? 'Invalid email or password. Please try again.'
+          : error?.message || 'Login failed. Please try again.';
+      Alert.alert('Login Error', message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSignUp = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!name || !email || !password) {
+      Alert.alert('Error', 'Please fill in all fields (name, email, and password)');
       return;
     }
 
     try {
       setLoading(true);
-      const { data, error } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-        options: {
-          data: {
-            first_name: 'User',
-            last_name: 'Name'
-          }
-        }
+
+      // 1) Create Supabase Auth user
+      const data = await signUp(email.trim(), password, {
+        name: name.trim(),
       });
 
-      if (error) {
-        Alert.alert('Sign Up Error', error.message);
+      if (!data) {
+        Alert.alert('Sign Up Error', 'Unable to create account. Please try again.');
         return;
       }
 
+      const authUser = data.user || data.session?.user;
+
+      // 2) Create profile in public.users table (best-effort)
+      if (authUser) {
+        try {
+          await createUser({
+            id: authUser.id, // Must match auth.uid() for RLS
+            name: name.trim() || 'Metro NaviGo User',
+            email: authUser.email || email.trim(),
+            phone: null,
+            preferences: {},
+          });
+        } catch (profileError) {
+          console.warn('Error creating user profile record:', profileError);
+          // We don't block sign-up on profile creation; ping/feedback can still work
+        }
+      }
+
       Alert.alert(
-        'Success', 
-        'Account created! Please check your email to verify your account.',
+        'Success',
+        'Account created! Please check your email to verify your account before logging in.',
         [{ text: 'OK' }]
       );
     } catch (error) {
-      Alert.alert('Error', 'Sign up failed. Please try again.');
+      const message =
+        error?.message?.includes('already registered') ||
+        error?.message?.includes('already exists')
+          ? 'An account with this email already exists. Try logging in instead.'
+          : error?.message || 'Sign up failed. Please try again.';
+      Alert.alert('Sign Up Error', message);
     } finally {
       setLoading(false);
     }
@@ -100,6 +124,20 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.form}>
+          {isCreatingAccount && (
+            <View style={styles.inputContainer}>
+              <Ionicons name="person" size={20} color="#6B7280" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Full Name"
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                autoCorrect={false}
+              />
+            </View>
+          )}
+
           <View style={styles.inputContainer}>
             <Ionicons name="mail" size={20} color="#6B7280" style={styles.inputIcon} />
             <TextInput
@@ -137,26 +175,38 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={[styles.button, styles.loginButton]}
-            onPress={handleLogin}
+            onPress={isCreatingAccount ? handleSignUp : handleLogin}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons name="log-in" size={20} color="#fff" />
-                <Text style={styles.buttonText}>Sign In</Text>
+                <Ionicons
+                  name={isCreatingAccount ? 'person-add' : 'log-in'}
+                  size={20}
+                  color="#fff"
+                />
+                <Text style={styles.buttonText}>
+                  {isCreatingAccount ? 'Create Account' : 'Sign In'}
+                </Text>
               </>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.button, styles.signupButton]}
-            onPress={handleSignUp}
+            onPress={() => setIsCreatingAccount((prev) => !prev)}
             disabled={loading}
           >
-            <Ionicons name="person-add" size={20} color="#F59E0B" />
-            <Text style={styles.signupButtonText}>Create Account</Text>
+            <Ionicons
+              name={isCreatingAccount ? 'log-in' : 'person-add'}
+              size={20}
+              color="#F59E0B"
+            />
+            <Text style={styles.signupButtonText}>
+              {isCreatingAccount ? 'Back to Sign In' : 'Create Account'}
+            </Text>
           </TouchableOpacity>
         </View>
 
