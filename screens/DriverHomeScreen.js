@@ -10,6 +10,8 @@ import {
   Pressable,
   ActivityIndicator,
   Modal,
+  SafeAreaView,
+  FlatList,
 } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1000,9 +1002,11 @@ export default function DriverHomeScreen({ navigation }) {
       <Modal
         visible={showPingModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
+        transparent={false}
+        statusBarTranslucent={false}
       >
-        <View style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowPingModal(false)}>
               <Text style={styles.modalCancel}>Close</Text>
@@ -1013,20 +1017,24 @@ export default function DriverHomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
           
-          <ScrollView 
-            style={styles.modalContent}
+          <FlatList
+            data={pingNotifications}
+            keyExtractor={(item) => item.id}
             contentContainerStyle={styles.modalContentContainer}
             showsVerticalScrollIndicator={true}
-          >
-            {pingNotifications.length === 0 ? (
+            bounces={true}
+            keyboardShouldPersistTaps="handled"
+            removeClippedSubviews={false}
+            scrollEventThrottle={16}
+            ListEmptyComponent={() => (
               <View style={styles.emptyPingContainer}>
                 <Ionicons name="notifications-off" size={64} color="#D1D5DB" />
                 <Text style={styles.emptyPingText}>No ping notifications</Text>
                 <Text style={styles.emptyPingSubtext}>Passengers will appear here when they ping you</Text>
               </View>
-            ) : (
-              pingNotifications.map((ping) => (
-                <View key={ping.id} style={styles.pingCard}>
+            )}
+            renderItem={({ item: ping }) => (
+                <View style={styles.pingCard}>
                   <View style={styles.pingHeader}>
                     <View style={styles.pingUserInfo}>
                       <Ionicons name="person-circle" size={40} color="#f59e0b" />
@@ -1101,6 +1109,8 @@ export default function DriverHomeScreen({ navigation }) {
                       <TouchableOpacity 
                         style={[styles.pingActionButton, styles.acknowledgeButton]}
                         onPress={() => handleAcknowledgePing(ping.id)}
+                        delayPressIn={0}
+                        activeOpacity={0.7}
                       >
                         <Ionicons name="checkmark-circle" size={20} color="#fff" />
                         <Text style={styles.pingActionButtonText}>Acknowledge</Text>
@@ -1108,6 +1118,8 @@ export default function DriverHomeScreen({ navigation }) {
                       <TouchableOpacity 
                         style={[styles.pingActionButton, styles.completeButton]}
                         onPress={() => handleCompletePing(ping.id)}
+                        delayPressIn={0}
+                        activeOpacity={0.7}
                       >
                         <Ionicons name="checkmark-done-circle" size={20} color="#fff" />
                         <Text style={styles.pingActionButtonText}>Complete</Text>
@@ -1120,6 +1132,8 @@ export default function DriverHomeScreen({ navigation }) {
                       <TouchableOpacity 
                         style={[styles.pingActionButton, styles.completeButton, { flex: 1 }]}
                         onPress={() => handleCompletePing(ping.id)}
+                        delayPressIn={0}
+                        activeOpacity={0.7}
                       >
                         <Ionicons name="checkmark-done-circle" size={20} color="#fff" />
                         <Text style={styles.pingActionButtonText}>Mark Complete</Text>
@@ -1127,10 +1141,9 @@ export default function DriverHomeScreen({ navigation }) {
                     </View>
                   )}
                 </View>
-              ))
             )}
-          </ScrollView>
-        </View>
+          />
+        </SafeAreaView>
       </Modal>
 
       <AlarmModal
