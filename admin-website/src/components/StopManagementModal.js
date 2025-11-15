@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Plus, Trash2, MapPin, Edit2 } from 'lucide-react';
+import { X, Save, Plus, Trash2, MapPin, Edit2, Navigation, Loader } from 'lucide-react';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { toast } from 'react-hot-toast';
+import { updateRouteCoordinates } from '../utils/routeDirections';
 
 const StopManagementModal = ({ route, onClose }) => {
   const { supabase, stops, refreshData } = useSupabase();
   const [routeStops, setRouteStops] = useState([]);
   const [editingStop, setEditingStop] = useState(null);
+  const [generatingRoute, setGeneratingRoute] = useState(false);
   const [newStop, setNewStop] = useState({
     name: '',
     address: '',
@@ -14,6 +16,9 @@ const StopManagementModal = ({ route, onClose }) => {
     longitude: '',
     sequence: 0
   });
+
+  // Get Google Maps API key from environment
+  const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
   useEffect(() => {
     if (route) {
@@ -54,6 +59,9 @@ const StopManagementModal = ({ route, onClose }) => {
         sequence: 0
       });
       await refreshData();
+      
+      // Auto-regenerate route path
+      await handleRegenerateRoute(true);
     } catch (error) {
       toast.error('Failed to add stop: ' + error.message);
     }
@@ -91,8 +99,53 @@ const StopManagementModal = ({ route, onClose }) => {
 
       toast.success('Stop deleted successfully!');
       await refreshData();
+      
+      // Auto-regenerate route path
+      await handleRegenerateRoute(true);
     } catch (error) {
       toast.error('Failed to delete stop: ' + error.message);
+    }
+  };
+
+  const handleRegenerateRoute = async (silent = false) => {
+    if (routeStops.length < 2) {
+      if (!silent) {
+        toast.error('Need at least 2 stops to generate route path');
+      }
+      return;
+    }
+
+    setGeneratingRoute(true);
+    
+    try {
+      if (!silent) {
+        toast.loading('Generating route path...', { id: 'generate-route' });
+      }
+
+      const success = await updateRouteCoordinates(
+        route.id,
+        routeStops,
+        supabase,
+        googleMapsApiKey
+      );
+
+      if (success) {
+        if (!silent) {
+          toast.success('Route path generated successfully!', { id: 'generate-route' });
+        }
+        await refreshData();
+      } else {
+        if (!silent) {
+          toast.error('Failed to generate route path', { id: 'generate-route' });
+        }
+      }
+    } catch (error) {
+      console.error('Error generating route:', error);
+      if (!silent) {
+        toast.error('Error: ' + error.message, { id: 'generate-route' });
+      }
+    } finally {
+      setGeneratingRoute(false);
     }
   };
 
@@ -124,7 +177,7 @@ const StopManagementModal = ({ route, onClose }) => {
         <div className="inline-block w-full max-w-4xl my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <div>
+            <div className="flex-1">
               <h3 className="text-lg font-semibold text-gray-900">
                 Manage Stops for {route?.name}
               </h3>
@@ -132,12 +185,27 @@ const StopManagementModal = ({ route, onClose }) => {
                 Route {route?.route_number} • {routeStops.length} stops
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => handleRegenerateRoute(false)}
+                disabled={generatingRoute || routeStops.length < 2}
+                className="flex items-center space-x-2 px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Generate accurate route path following roads"
+              >
+                {generatingRoute ? (
+                  <Loader className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Navigation className="w-4 h-4" />
+                )}
+                <span>Generate Route Path</span>
+              </button>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Content */}
