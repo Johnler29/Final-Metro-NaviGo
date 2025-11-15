@@ -15,7 +15,7 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSupabase } from '../contexts/SupabaseContext';
 
-export default function DriverMapScreen({ navigation }) {
+export default function DriverMapScreen({ navigation, route }) {
   const TRACKING_FLAG_KEY = 'isTrackingActive';
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -26,6 +26,9 @@ export default function DriverMapScreen({ navigation }) {
   const [driverSession, setDriverSession] = useState(null);
   const [offlineQueue, setOfflineQueue] = useState([]);
   const [locationAccuracy, setLocationAccuracy] = useState(null);
+  const [pingLocation, setPingLocation] = useState(null);
+  const [pingUserInfo, setPingUserInfo] = useState(null);
+  const [isMapReady, setIsMapReady] = useState(false);
   
   const locationSubscription = useRef(null); // legacy watcher (not used in polling mode)
   const locationInterval = useRef(null);     // active 5s polling timer
@@ -35,6 +38,14 @@ export default function DriverMapScreen({ navigation }) {
     getLocation();
     initializeDriverSession();
     restoreTrackingState();
+    
+    // Check for ping location from route params
+    if (route?.params?.pingLocation) {
+      const { latitude, longitude, address, userName } = route.params.pingLocation;
+      setPingLocation({ latitude: parseFloat(latitude), longitude: parseFloat(longitude) });
+      setPingUserInfo({ address, userName });
+      console.log('📍 Ping location received:', { latitude, longitude, address, userName });
+    }
     
     // Handle app state changes for background tracking
     const handleAppStateChange = (nextAppState) => {
@@ -52,7 +63,7 @@ export default function DriverMapScreen({ navigation }) {
       subscription?.remove();
       stopLocationTracking();
     };
-  }, []);
+  }, [route?.params?.pingLocation]);
 
   // Auto-start/stop location tracking based on trip status
   useEffect(() => {
@@ -492,17 +503,47 @@ export default function DriverMapScreen({ navigation }) {
     );
   }
 
-  const initialRegion = location ? {
-    latitude: location.coords.latitude,
-    longitude: location.coords.longitude,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
-  } : {
-    latitude: 40.7128,
-    longitude: -74.0060,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
+  // Calculate initial region based on ping location or driver location
+  const getInitialRegion = () => {
+    if (pingLocation) {
+      // If ping location exists, center on it or include both locations
+      const centerLat = location 
+        ? (location.coords.latitude + pingLocation.latitude) / 2
+        : pingLocation.latitude;
+      const centerLng = location
+        ? (location.coords.longitude + pingLocation.longitude) / 2
+        : pingLocation.longitude;
+      
+      // Calculate delta to include both locations if driver location exists
+      const latDelta = location
+        ? Math.abs(location.coords.latitude - pingLocation.latitude) * 2.5 || 0.01
+        : 0.01;
+      const lngDelta = location
+        ? Math.abs(location.coords.longitude - pingLocation.longitude) * 2.5 || 0.01
+        : 0.01;
+      
+      return {
+        latitude: centerLat,
+        longitude: centerLng,
+        latitudeDelta: Math.max(latDelta, 0.01),
+        longitudeDelta: Math.max(lngDelta, 0.01),
+      };
+    }
+    
+    return location ? {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    } : {
+      latitude: 40.7128,
+      longitude: -74.0060,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    };
   };
+
+  const initialRegion = getInitialRegion();
 
   return (
     <View style={styles.container}>
@@ -545,8 +586,14 @@ export default function DriverMapScreen({ navigation }) {
         userLocationPriority="high"
         userLocationUpdateInterval={10000}
         userLocationFastestInterval={5000}
-        onMapReady={() => console.log('🗺️ Driver map ready')}
-        onError={(e) => console.warn('MapView error:', e?.nativeEvent || e)}
+        onMapReady={() => {
+          console.log('🗺️ Driver map ready');
+          setIsMapReady(true);
+        }}
+        onError={(e) => {
+          console.warn('MapView error:', e?.nativeEvent || e);
+          Alert.alert('Map Error', 'There was an error loading the map. Please try again.');
+        }}
         onRegionChangeComplete={() => {}}
         moveOnMarkerPress={false}
         toolbarEnabled={false}
@@ -565,8 +612,8 @@ export default function DriverMapScreen({ navigation }) {
           />
         )}
 
-        {/* Route polyline */}
-        {routeCoordinates.length > 1 && (
+        {/* Route polyline - disabled (we no longer show route on driver map) */}
+        {false && routeCoordinates.length > 1 && (
           <Polyline
             coordinates={routeCoordinates}
             strokeColor="#f59e0b"
@@ -575,8 +622,8 @@ export default function DriverMapScreen({ navigation }) {
           />
         )}
 
-        {/* Route markers */}
-        {routeCoordinates.map((coord, index) => (
+        {/* Route markers - disabled (we no longer show route stops) */}
+        {false && routeCoordinates.map((coord, index) => (
           <Marker
             key={index}
             coordinate={coord}
@@ -585,6 +632,34 @@ export default function DriverMapScreen({ navigation }) {
             pinColor={index === 0 ? "green" : index === routeCoordinates.length - 1 ? "red" : "orange"}
           />
         ))}
+
+        {/* Ping user location marker */}
+        {isMapReady && pingLocation && pingLocation.latitude && pingLocation.longitude && 
+         !isNaN(pingLocation.latitude) && !isNaN(pingLocation.longitude) && (
+          <Marker
+            coordinate={pingLocation}
+            title={pingUserInfo?.userName ? `${pingUserInfo.userName}'s Location` : "Passenger Location"}
+            description={pingUserInfo?.address || "User ping location"}
+          >
+            <View style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: '#3B82F6',
+              borderWidth: 3,
+              borderColor: '#FFFFFF',
+              justifyContent: 'center',
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 5,
+            }}>
+              <Ionicons name="person" size={20} color="#FFFFFF" />
+            </View>
+          </Marker>
+        )}
       </MapView>
 
       {/* Compact Route Info Panel */}

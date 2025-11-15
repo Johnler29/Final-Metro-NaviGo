@@ -321,6 +321,27 @@ export default function DriverHomeScreen({ navigation }) {
     }
   };
 
+  const handleViewLocation = (latitude, longitude, address, userName, pingId) => {
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    
+    if (isNaN(lat) || isNaN(lng)) {
+      Alert.alert('Error', 'Invalid location coordinates');
+      return;
+    }
+
+    // Navigate directly to map view
+    navigation.navigate('DriverMap', {
+      pingLocation: {
+        latitude: lat,
+        longitude: lng,
+        address: address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        userName: userName || 'Passenger',
+        pingId: pingId,
+      },
+    });
+  };
+
   // Calculate driver stats from real data
   const calculateDriverStats = () => {
     if (!currentDriver) return [];
@@ -1095,12 +1116,23 @@ export default function DriverHomeScreen({ navigation }) {
                     )}
 
                     {ping.location_latitude && ping.location_longitude && (
-                      <View style={styles.pingLocation}>
+                      <TouchableOpacity 
+                        style={styles.pingLocation}
+                        onPress={() => handleViewLocation(
+                          ping.location_latitude,
+                          ping.location_longitude,
+                          ping.location_address,
+                          ping.user_name || 'Passenger',
+                          ping.id
+                        )}
+                        activeOpacity={0.7}
+                      >
                         <Ionicons name="location" size={16} color="#f59e0b" />
                         <Text style={styles.pingLocationText}>
                           {ping.location_address || `${ping.location_latitude.toFixed(5)}, ${ping.location_longitude.toFixed(5)}`}
                         </Text>
-                      </View>
+                        <Ionicons name="open-outline" size={16} color="#f59e0b" style={{ marginLeft: 8 }} />
+                      </TouchableOpacity>
                     )}
                   </View>
 
@@ -1905,6 +1937,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
+    marginTop: 8,
   },
   pingLocationText: {
     fontSize: 13,
