@@ -4,7 +4,6 @@ import { SupabaseProvider } from './contexts/SupabaseContext';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import FleetManagement from './pages/FleetManagement';
-import RouteManagement from './pages/RouteManagement';
 import DriverManagement from './pages/DriverManagement';
 import ScheduleManagement from './pages/ScheduleManagement';
 import UserManagement from './pages/UserManagement';
@@ -20,7 +19,6 @@ function App() {
             <Route path="/" element={<Layout />}>
               <Route index element={<Dashboard />} />
               <Route path="fleet" element={<FleetManagement />} />
-              <Route path="routes" element={<RouteManagement />} />
               <Route path="drivers" element={<DriverManagement />} />
               <Route path="schedules" element={<ScheduleManagement />} />
               <Route path="users" element={<UserManagement />} />

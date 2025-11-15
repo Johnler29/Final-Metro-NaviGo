@@ -3,7 +3,6 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Bus, 
-  Navigation, 
   Users, 
   Calendar, 
   UserCheck, 
@@ -18,7 +17,6 @@ const Sidebar = ({ isOpen, onClose }) => {
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Bus Management', href: '/fleet', icon: Bus },
-    { name: 'Route Management', href: '/routes', icon: Navigation },
     { name: 'Driver Management', href: '/drivers', icon: Users },
     { name: 'Schedule Management', href: '/schedules', icon: Calendar },
     { name: 'User Management', href: '/users', icon: UserCheck },
