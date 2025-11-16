@@ -455,6 +455,26 @@ const RealtimeBusMap = ({
       const updatedBus = payload.new;
       const busId = updatedBus.id;
       
+      // Check if driver went off duty - validate coordinates and driver status
+      const hasValidCoordinates = updatedBus.latitude != null && 
+                                   updatedBus.longitude != null &&
+                                   !isNaN(updatedBus.latitude) && 
+                                   !isNaN(updatedBus.longitude);
+      const hasActiveDriver = updatedBus.driver_id && 
+                              (updatedBus.status === 'active' || updatedBus.status === undefined);
+      const isDriverOffline = !hasActiveDriver || !hasValidCoordinates;
+      
+      // Check if bus has recent location update (within last 5 minutes)
+      const hasRecentLocation = updatedBus.last_location_update && 
+        new Date(updatedBus.last_location_update) > new Date(Date.now() - 5 * 60 * 1000);
+      
+      // If driver went off duty or coordinates are invalid, remove bus from map
+      if (isDriverOffline || !hasRecentLocation) {
+        console.log('🚫 Driver went off duty or bus went offline, removing from map:', busId);
+        setBuses(prevBuses => prevBuses.filter(bus => bus.bus_id !== busId));
+        return;
+      }
+      
       // Update bus in state
       setBuses(prevBuses => {
         const updatedBuses = prevBuses.map(bus => {
@@ -467,15 +487,15 @@ const RealtimeBusMap = ({
               tracking_status: updatedBus.tracking_status,
               current_passengers: updatedBus.current_passengers,
               capacity_percentage: updatedBus.capacity_percentage,
-              last_location_update: updatedBus.updated_at,
+              last_location_update: updatedBus.updated_at || updatedBus.last_location_update,
               location_status: 'live'
             };
           }
           return bus;
         });
         
-        // If bus not in current list, add it
-        if (!prevBuses.find(bus => bus.bus_id === busId)) {
+        // If bus not in current list, add it only if it has valid data
+        if (!prevBuses.find(bus => bus.bus_id === busId) && hasValidCoordinates && hasActiveDriver) {
           console.log('🎯 Adding new bus from real-time update:', busId);
           const route = routes?.find(r => r.id === updatedBus.route_id);
           const newBus = {
@@ -493,13 +513,19 @@ const RealtimeBusMap = ({
                             (updatedBus.capacity_percentage || 0) >= 70 ? 'crowded' : 
                             (updatedBus.capacity_percentage || 0) >= 40 ? 'moderate' : 'light',
             is_moving: (updatedBus.tracking_status || 'moving') === 'moving',
-            last_location_update: updatedBus.updated_at,
+            last_location_update: updatedBus.updated_at || updatedBus.last_location_update,
             validation: { isValid: true, reason: 'realtime_update' }
           };
           updatedBuses.push(newBus);
         }
         
-        return updatedBuses;
+        // Filter out any buses with invalid coordinates (safety check)
+        return updatedBuses.filter(bus => 
+          bus.latitude != null && 
+          bus.longitude != null && 
+          !isNaN(bus.latitude) && 
+          !isNaN(bus.longitude)
+        );
       });
       
     } catch (err) {
@@ -513,6 +539,20 @@ const RealtimeBusMap = ({
       console.log('🎯 Handling bus insert:', payload);
       const newBus = payload.new;
       const busId = newBus.id;
+      
+      // Validate bus data before adding
+      const hasValidCoordinates = newBus.latitude != null && 
+                                   newBus.longitude != null &&
+                                   !isNaN(newBus.latitude) && 
+                                   !isNaN(newBus.longitude);
+      const hasActiveDriver = newBus.driver_id && 
+                              (newBus.status === 'active' || newBus.status === undefined);
+      
+      // Only add bus if it has valid coordinates and active driver
+      if (!hasValidCoordinates || !hasActiveDriver) {
+        console.log('🚫 Skipping bus insert - invalid coordinates or inactive driver:', busId);
+        return;
+      }
       
       // Add new bus to state
       setBuses(prevBuses => {

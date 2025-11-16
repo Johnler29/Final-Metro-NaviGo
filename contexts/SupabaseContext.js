@@ -149,29 +149,63 @@ export const SupabaseProvider = ({ children }) => {
       
       if (payload.event === 'UPDATE' || payload.event === 'INSERT') {
         console.log('✅ Processing bus update:', payload.new);
+        const updatedBus = payload.new;
+        
+        // Validate bus data - check if driver went off duty
+        const hasValidCoordinates = updatedBus.latitude != null && 
+                                     updatedBus.longitude != null &&
+                                     !isNaN(updatedBus.latitude) && 
+                                     !isNaN(updatedBus.longitude);
+        const hasActiveDriver = updatedBus.driver_id && 
+                                (updatedBus.status === 'active' || updatedBus.status === undefined);
+        
+        // Check if bus has recent location update (within last 5 minutes)
+        const hasRecentLocation = updatedBus.last_location_update && 
+          new Date(updatedBus.last_location_update) > new Date(Date.now() - 5 * 60 * 1000);
+        
+        // If driver went off duty or coordinates are invalid, remove bus from list
+        if (!hasValidCoordinates || !hasActiveDriver || !hasRecentLocation) {
+          console.log('🚫 Driver went off duty or bus went offline, removing from list:', updatedBus.id);
+          setBuses(prevBuses => prevBuses.filter(b => b.id !== updatedBus.id));
+          return;
+        }
         
         // Merge all relevant fields so visibility filters react correctly
         setBuses(prevBuses => {
-          const exists = prevBuses.some(b => b.id === payload.new.id);
+          const exists = prevBuses.some(b => b.id === updatedBus.id);
           const merged = prevBuses.map(bus => {
-            if (bus.id !== payload.new.id) return bus;
+            if (bus.id !== updatedBus.id) return bus;
             return {
               ...bus,
               // location & telemetry
-              latitude: payload.new.latitude,
-              longitude: payload.new.longitude,
-              speed: payload.new.speed,
-              heading: payload.new.heading,
-              tracking_status: payload.new.tracking_status,
-              last_location_update: payload.new.last_location_update,
+              latitude: updatedBus.latitude,
+              longitude: updatedBus.longitude,
+              speed: updatedBus.speed,
+              heading: updatedBus.heading,
+              tracking_status: updatedBus.tracking_status,
+              last_location_update: updatedBus.last_location_update || updatedBus.updated_at,
               // visibility-critical fields
-              status: payload.new.status,
-              driver_id: payload.new.driver_id,
-              route_id: payload.new.route_id,
-              updated_at: payload.new.updated_at,
+              status: updatedBus.status,
+              driver_id: updatedBus.driver_id,
+              route_id: updatedBus.route_id,
+              updated_at: updatedBus.updated_at,
             };
           });
-          return exists ? merged : [...prevBuses, payload.new];
+          
+          // If bus doesn't exist and has valid data, add it
+          if (!exists && hasValidCoordinates && hasActiveDriver) {
+            return [...merged, updatedBus];
+          }
+          
+          // Filter out any buses with invalid coordinates (safety check)
+          return merged.filter(bus => 
+            bus.latitude != null && 
+            bus.longitude != null && 
+            !isNaN(bus.latitude) && 
+            !isNaN(bus.longitude) &&
+            bus.driver_id &&
+            (bus.status === 'active' || bus.status === undefined)
+          );
         });
       } else if (payload.event === 'DELETE') {
         // Remove deleted buses from local state

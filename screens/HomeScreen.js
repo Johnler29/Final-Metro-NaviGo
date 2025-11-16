@@ -162,8 +162,12 @@ export default function HomeScreen({ navigation }) {
       .filter(bus => {
         // Show buses that have active drivers and valid coordinates (same logic as MapScreen)
         const hasActiveDriver = bus.driver_id && bus.status === 'active';
-        const hasValidCoordinates = bus.latitude && bus.longitude && 
+        const hasValidCoordinates = bus.latitude != null && bus.longitude != null && 
           !isNaN(bus.latitude) && !isNaN(bus.longitude);
+        
+        // Check if bus has recent location update (within last 5 minutes) - ensures driver is still on duty
+        const hasRecentLocation = bus.last_location_update && 
+          new Date(bus.last_location_update) > new Date(Date.now() - 5 * 60 * 1000);
         
         // Debug logging for each bus
         console.log('🏠 HomeScreen - Bus filter check:', {
@@ -172,10 +176,12 @@ export default function HomeScreen({ navigation }) {
           status: bus.status,
           hasActiveDriver,
           hasValidCoordinates,
+          hasRecentLocation,
           coords: { lat: bus.latitude, lng: bus.longitude }
         });
         
-        return hasActiveDriver && hasValidCoordinates;
+        // Only show buses with active drivers, valid coordinates, and recent location updates
+        return hasActiveDriver && hasValidCoordinates && hasRecentLocation;
       })
       .map(bus => {
         // Use fallback coordinates if needed
