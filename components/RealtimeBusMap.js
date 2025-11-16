@@ -47,11 +47,14 @@ const RealtimeBusMap = ({
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [showFallback, setShowFallback] = useState(false);
   const [demoRouteCoords, setDemoRouteCoords] = useState([]);
+  const [followUserLocation, setFollowUserLocation] = useState(true);
   
   // Animation refs
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const mapRef = useRef(null);
+  const userLocationRef = useRef(userLocation);
+  const selectedBusRef = useRef(null);
 
   const getGoogleMapsApiKey = () => {
     return (
@@ -383,6 +386,21 @@ const RealtimeBusMap = ({
         )
         .on('postgres_changes',
           {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'buses'
+            // No filter - catch all bus updates (including location changes)
+          },
+          (payload) => {
+            console.log('🎯 Real-time bus update received (all buses):', payload);
+            // Only handle if it's a location update (latitude/longitude changed)
+            if (payload.new.latitude != null && payload.new.longitude != null) {
+              handleBusUpdate(payload);
+            }
+          }
+        )
+        .on('postgres_changes',
+          {
             event: 'INSERT',
             schema: 'public',
             table: 'buses'
@@ -682,10 +700,16 @@ const RealtimeBusMap = ({
     );
   };
 
-  // Focus on selected bus when selectedBusId changes
+  // Update user location ref when it changes
+  useEffect(() => {
+    userLocationRef.current = userLocation;
+  }, [userLocation]);
+
+  // Focus on selected bus when selectedBusId changes (only if a bus is selected)
   useEffect(() => {
     if (selectedBusId && buses.length > 0 && mapRef.current) {
       console.log('🎯 RealtimeBusMap - Focusing on selected bus:', selectedBusId);
+      setFollowUserLocation(false); // Stop following user when bus is selected
       console.log('🎯 RealtimeBusMap - Available bus IDs:', buses.map(bus => bus.bus_id));
       const selectedBus = buses.find(bus => bus.bus_id === selectedBusId);
       if (selectedBus) {
@@ -706,8 +730,70 @@ const RealtimeBusMap = ({
         console.log('🎯 RealtimeBusMap - Looking for:', selectedBusId);
         console.log('🎯 RealtimeBusMap - Available buses:', buses.map(bus => ({ id: bus.bus_id, name: bus.bus_name })));
       }
+    } else if (!selectedBusId) {
+      // When no bus is selected, follow user location
+      setFollowUserLocation(true);
     }
   }, [selectedBusId, buses]);
+
+  // Follow selected bus as it moves (if a bus is selected)
+  useEffect(() => {
+    if (selectedBusId && buses.length > 0 && mapRef.current && !followUserLocation) {
+      const selectedBus = buses.find(bus => bus.bus_id === selectedBusId);
+      if (selectedBus && selectedBus.latitude && selectedBus.longitude) {
+        // Only animate if coordinates actually changed (avoid unnecessary animations)
+        const prevCoords = selectedBusRef.current;
+        const coordsChanged = !prevCoords || 
+          prevCoords.latitude !== selectedBus.latitude || 
+          prevCoords.longitude !== selectedBus.longitude;
+        
+        if (coordsChanged) {
+          selectedBusRef.current = {
+            latitude: selectedBus.latitude,
+            longitude: selectedBus.longitude
+          };
+          
+          const region = {
+            latitude: selectedBus.latitude,
+            longitude: selectedBus.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          };
+          try {
+            // Smoothly follow the selected bus as it moves
+            mapRef.current.animateToRegion(region, 1000);
+            console.log('📍 RealtimeBusMap - Following selected bus:', selectedBus.bus_name, 'at', selectedBus.latitude, selectedBus.longitude);
+          } catch (e) {
+            console.warn('Failed to follow selected bus:', e?.message || e);
+          }
+        }
+      }
+    } else {
+      selectedBusRef.current = null;
+    }
+  }, [buses, selectedBusId, followUserLocation]);
+
+  // Follow user location as they move (only if followUserLocation is true and no bus is selected)
+  useEffect(() => {
+    if (!followUserLocation || !userLocation || !mapRef.current || selectedBusId) {
+      return;
+    }
+
+    console.log('📍 RealtimeBusMap - Following user location:', userLocation.latitude, userLocation.longitude);
+    
+    const region = {
+      latitude: userLocation.latitude,
+      longitude: userLocation.longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    };
+
+    try {
+      mapRef.current.animateToRegion(region, 1000);
+    } catch (e) {
+      console.warn('Failed to animate to user location:', e?.message || e);
+    }
+  }, [userLocation, followUserLocation, selectedBusId]);
 
   // Notify parent when buses are loaded
   useEffect(() => {
@@ -738,6 +824,28 @@ const RealtimeBusMap = ({
       console.log('🎯 RealtimeBusMap - Initial map region:', initialRegion);
     }
   }, [initialRegion]);
+
+  // Initialize to follow user location if available
+  useEffect(() => {
+    if (userLocation && !selectedBusId) {
+      setFollowUserLocation(true);
+      const region = {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      if (mapRef.current) {
+        setTimeout(() => {
+          try {
+            mapRef.current.animateToRegion(region, 1000);
+          } catch (e) {
+            console.warn('Failed to initialize user location:', e?.message || e);
+          }
+        }, 500);
+      }
+    }
+  }, []);
 
   // Refresh buses every 30 seconds as fallback
   useEffect(() => {
@@ -796,6 +904,27 @@ const RealtimeBusMap = ({
         showsCompass
         showsScale
         mapType="standard"
+        onUserLocationChange={(event) => {
+          if (followUserLocation && !selectedBusId && event.nativeEvent.coordinate) {
+            const newLocation = {
+              latitude: event.nativeEvent.coordinate.latitude,
+              longitude: event.nativeEvent.coordinate.longitude,
+            };
+            // Update map region to follow user
+            const region = {
+              ...newLocation,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            };
+            if (mapRef.current) {
+              try {
+                mapRef.current.animateToRegion(region, 500);
+              } catch (e) {
+                console.warn('Failed to follow user location:', e?.message || e);
+              }
+            }
+          }
+        }}
         onError={(error) => {
           console.error('Map error:', error);
           if (error.nativeEvent?.message?.includes('quota') || 
