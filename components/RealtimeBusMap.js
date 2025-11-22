@@ -10,15 +10,13 @@ import {
   Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import Constants from 'expo-constants';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { validateLocation, calculateDistance } from '../utils/locationUtils';
-import RoutePolyline from './RoutePolyline';
 import FallbackBusList from './FallbackBusList';
 import { getAllRoutes, getRouteById } from '../data/routes';
 import { supabaseHelpers } from '../lib/supabase';
-import polyline from '@mapbox/polyline';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,10 +28,8 @@ const RealtimeBusMap = ({
   showCapacityStatus = true,
   userLocation = null,
   onBusesLoaded = null,
-  showRoutes = true,
   selectedRouteId = null,
-  onRouteSelect = null,
-  showInfoBubbles = true
+  onRouteSelect = null
 }) => {
   const { supabase, buses: contextBuses, routes } = useSupabase();
   const [buses, setBuses] = useState([]);
@@ -46,7 +42,6 @@ const RealtimeBusMap = ({
   const [availableRoutes, setAvailableRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [showFallback, setShowFallback] = useState(false);
-  const [demoRouteCoords, setDemoRouteCoords] = useState([]);
   const [followUserLocation, setFollowUserLocation] = useState(true);
   
   // Animation refs
@@ -64,55 +59,6 @@ const RealtimeBusMap = ({
     );
   };
 
-  // Demo: fetch a point-to-point route using Google Directions API
-  // Point A: Robinsons Place Dasmariñas
-  // Point B: Robinsons Place Imus
-  const fetchDemoPointToPointRoute = useCallback(async () => {
-    try {
-      const apiKey = getGoogleMapsApiKey();
-      if (!apiKey) {
-        console.warn('Google Maps API key not available for Directions request');
-        return;
-      }
-
-      const origin = encodeURIComponent('Robinsons Place Dasmarinas, Cavite, Philippines');
-      const destination = encodeURIComponent('Robinsons Place Imus, Cavite, Philippines');
-
-      const url =
-        `https://maps.googleapis.com/maps/api/directions/json` +
-        `?origin=${origin}` +
-        `&destination=${destination}` +
-        `&mode=driving` +
-        `&key=${apiKey}`;
-
-      console.log('🚗 Fetching demo Directions route:', url);
-
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data.status !== 'OK' || !data.routes || data.routes.length === 0) {
-        console.warn('Directions API returned no routes:', data.status, data.error_message);
-        return;
-      }
-
-      const overviewPolyline = data.routes[0].overview_polyline?.points;
-      if (!overviewPolyline) {
-        console.warn('No overview polyline found in Directions response');
-        return;
-      }
-
-      const decodedPoints = polyline.decode(overviewPolyline);
-      const coords = decodedPoints.map(([latitude, longitude]) => ({
-        latitude,
-        longitude,
-      }));
-
-      console.log('✅ Demo Directions route loaded with', coords.length, 'points');
-      setDemoRouteCoords(coords);
-    } catch (err) {
-      console.error('Error fetching demo Directions route:', err);
-    }
-  }, []);
 
   // Start pulse animation for live buses
   const startPulseAnimation = useCallback(() => {
@@ -808,8 +754,6 @@ const RealtimeBusMap = ({
     loadBuses();
     setupRealtimeSubscription();
     startPulseAnimation();
-    // Load a demo point-to-point route between Robinsons Dasmariñas and Robinsons Imus
-    fetchDemoPointToPointRoute();
     
     return () => {
       if (realtimeSubscription && supabase) {
@@ -949,31 +893,6 @@ const RealtimeBusMap = ({
           </Marker>
         )}
         
-        {/* Static route polylines from database/fallback */}
-        {showRoutes && availableRoutes.map((route) => (
-          <RoutePolyline
-            key={route.id}
-            route={route}
-            isVisible={!selectedRoute || selectedRoute.id === route.id}
-            showStops={true}
-            showDirection={true}
-            showInfoBubbles={showInfoBubbles}
-            isSelected={selectedRoute?.id === route.id}
-            onStopPress={(stop, index) => {
-              console.log('Stop pressed:', stop.name, 'at index:', index);
-            }}
-          />
-        ))}
-
-        {/* Demo point-to-point route: Robinsons Dasmariñas → Robinsons Imus */}
-        {demoRouteCoords.length > 0 && (
-          <Polyline
-            coordinates={demoRouteCoords}
-            strokeColor="#EF4444"
-            strokeWidth={5}
-          />
-        )}
-
         {/* Bus markers */}
         {console.log('🎯 RealtimeBusMap - Rendering', buses.length, 'bus markers')}
         {buses.length > 0 ? buses.map(renderBusMarker) : (

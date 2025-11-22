@@ -6,7 +6,6 @@ import RecentActivity from '../components/RecentActivity';
 import PerformanceChart from '../components/PerformanceChart';
 import { 
   Bus, 
-  Navigation, 
   Users, 
   UserCheck, 
   TrendingUp, 
@@ -15,7 +14,7 @@ import {
 } from 'lucide-react';
 
 const Dashboard = () => {
-  const { buses, drivers, users, routes, getAnalytics } = useSupabase();
+  const { buses, drivers, users, getAnalytics } = useSupabase();
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -39,7 +38,6 @@ const Dashboard = () => {
   const activeBuses = buses.filter(bus => bus.status === 'active').length;
   const busesWithLocation = buses.filter(bus => bus.latitude && bus.longitude).length;
   const activeDrivers = drivers.filter(driver => driver.status === 'active').length;
-  const totalRoutes = routes?.length || 0;
   const totalUsers = users.length;
 
   // Calculate performance metrics
@@ -55,15 +53,6 @@ const Dashboard = () => {
       color: 'text-amber-700',
       bgColor: 'bg-amber-50',
       change: '+2.5%',
-      changeType: 'positive'
-    },
-    {
-      title: 'Total Routes',
-      value: totalRoutes,
-      icon: Navigation,
-      color: 'text-blue-700',
-      bgColor: 'bg-blue-50',
-      change: '+1.2%',
       changeType: 'positive'
     },
     {
@@ -119,7 +108,7 @@ const Dashboard = () => {
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {metrics.map((metric, index) => (
           <MetricCard key={index} {...metric} />
         ))}

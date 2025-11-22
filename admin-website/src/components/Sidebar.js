@@ -8,7 +8,6 @@ import {
   UserCheck, 
   Settings,
   Bell,
-  Navigation,
   X
 } from 'lucide-react';
 
@@ -19,7 +18,6 @@ const Sidebar = ({ isOpen, onClose }) => {
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Bus Management', href: '/fleet', icon: Bus },
     { name: 'Driver Management', href: '/drivers', icon: Users },
-    { name: 'Route Management', href: '/routes', icon: Navigation },
     { name: 'Schedule Management', href: '/schedules', icon: Calendar },
     { name: 'User Management', href: '/users', icon: UserCheck },
     { name: 'Ping Notifications', href: '/pings', icon: Bell },

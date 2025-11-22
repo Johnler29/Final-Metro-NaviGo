@@ -442,10 +442,8 @@ export default function MapScreen({ navigation, route }) {
           showCapacityStatus={true}
           userLocation={location?.coords}
           onBusesLoaded={handleBusesLoaded}
-          showRoutes={true}
           selectedRouteId={selectedRouteId}
           onRouteSelect={handleRouteSelect}
-          showInfoBubbles={true}
           selectedRoute={selectedRoute}
         />
       )}
