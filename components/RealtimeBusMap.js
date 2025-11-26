@@ -17,6 +17,7 @@ import { validateLocation, calculateDistance } from '../utils/locationUtils';
 import FallbackBusList from './FallbackBusList';
 import { getAllRoutes, getRouteById } from '../data/routes';
 import { supabaseHelpers } from '../lib/supabase';
+import RoutePolyline from './RoutePolyline';
 
 const { width, height } = Dimensions.get('window');
 
@@ -50,6 +51,8 @@ const RealtimeBusMap = ({
   const mapRef = useRef(null);
   const userLocationRef = useRef(userLocation);
   const selectedBusRef = useRef(null);
+  const isUserInteractingRef = useRef(false);
+  const lastUserInteractionTime = useRef(0);
 
   const getGoogleMapsApiKey = () => {
     return (
@@ -91,8 +94,22 @@ const RealtimeBusMap = ({
   const loadRoutes = useCallback(async () => {
     try {
       const routes = await getAllRoutes(supabaseHelpers);
-      setAvailableRoutes(routes);
       console.log('✅ Loaded routes:', routes.length);
+      
+      // Debug: Log route details
+      routes.forEach(route => {
+        console.log(`📍 Route: ${route.name}`, {
+          id: route.id,
+          hasCoordinates: !!route.coordinates,
+          coordinatesCount: route.coordinates?.length || 0,
+          hasStops: route.stops?.length > 0,
+          stopsCount: route.stops?.length || 0,
+          origin: route.origin,
+          destination: route.destination
+        });
+      });
+      
+      setAvailableRoutes(routes);
       
       // Set selected route if provided
       if (selectedRouteId) {
@@ -725,6 +742,13 @@ const RealtimeBusMap = ({
       return;
     }
 
+    // Don't follow if user recently interacted with the map (within last 2 seconds)
+    const timeSinceInteraction = Date.now() - lastUserInteractionTime.current;
+    if (isUserInteractingRef.current || timeSinceInteraction < 2000) {
+      console.log('📍 RealtimeBusMap - Skipping follow: user is interacting with map');
+      return;
+    }
+
     console.log('📍 RealtimeBusMap - Following user location:', userLocation.latitude, userLocation.longitude);
     
     const region = {
@@ -849,6 +873,12 @@ const RealtimeBusMap = ({
         showsScale
         mapType="standard"
         onUserLocationChange={(event) => {
+          // Don't auto-follow if user is interacting with the map
+          const timeSinceInteraction = Date.now() - lastUserInteractionTime.current;
+          if (isUserInteractingRef.current || timeSinceInteraction < 2000) {
+            return;
+          }
+          
           if (followUserLocation && !selectedBusId && event.nativeEvent.coordinate) {
             const newLocation = {
               latitude: event.nativeEvent.coordinate.latitude,
@@ -867,6 +897,26 @@ const RealtimeBusMap = ({
                 console.warn('Failed to follow user location:', e?.message || e);
               }
             }
+          }
+        }}
+        onPanDrag={() => {
+          // User started dragging the map
+          isUserInteractingRef.current = true;
+          lastUserInteractionTime.current = Date.now();
+          setFollowUserLocation(false);
+          console.log('📍 User started dragging map - disabling auto-follow');
+        }}
+        onRegionChangeComplete={(region) => {
+          // User finished moving the map
+          const timeSinceInteraction = Date.now() - lastUserInteractionTime.current;
+          if (timeSinceInteraction < 100) {
+            // This was likely a user interaction, not programmatic
+            isUserInteractingRef.current = false;
+            // Keep followUserLocation disabled - user manually moved the map
+            console.log('📍 User finished moving map - keeping auto-follow disabled');
+          } else {
+            // This was likely programmatic, reset the flag
+            isUserInteractingRef.current = false;
           }
         }}
         onError={(error) => {
@@ -893,6 +943,36 @@ const RealtimeBusMap = ({
           </Marker>
         )}
         
+        {/* Route pins - showing start and end pins for all routes */}
+        {availableRoutes.map((route) => {
+          // Only render if route has coordinates
+          if (!route.coordinates || route.coordinates.length < 2) {
+            console.log('⚠️ Route missing coordinates - cannot show pins:', route.name, {
+              hasCoordinates: !!route.coordinates,
+              coordinatesLength: route.coordinates?.length || 0,
+              hasStops: route.stops?.length > 0,
+              stopsCount: route.stops?.length || 0
+            });
+            return null;
+          }
+          
+          console.log('✅ Rendering route pins for:', route.name, 'with', route.coordinates.length, 'coordinates');
+          console.log('📍 Route stops count:', route.stops?.length || 0);
+          console.log('📍 Route stops data:', route.stops);
+          
+          return (
+            <RoutePolyline
+              key={route.id}
+              route={route}
+              isVisible={true}
+              showStops={true}
+              showDirection={false}
+              showInfoBubbles={false}
+              isSelected={selectedRoute?.id === route.id}
+            />
+          );
+        })}
+        
         {/* Bus markers */}
         {console.log('🎯 RealtimeBusMap - Rendering', buses.length, 'bus markers')}
         {buses.length > 0 ? buses.map(renderBusMarker) : (
@@ -907,6 +987,33 @@ const RealtimeBusMap = ({
           </Marker>
         )}
       </MapView>
+      
+      {/* Re-enable follow user location button */}
+      {!followUserLocation && !selectedBusId && userLocation && (
+        <TouchableOpacity
+          style={styles.followButton}
+          onPress={() => {
+            setFollowUserLocation(true);
+            isUserInteractingRef.current = false;
+            lastUserInteractionTime.current = 0;
+            if (mapRef.current && userLocation) {
+              const region = {
+                latitude: userLocation.latitude,
+                longitude: userLocation.longitude,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              };
+              try {
+                mapRef.current.animateToRegion(region, 1000);
+              } catch (e) {
+                console.warn('Failed to center on user location:', e?.message || e);
+              }
+            }
+          }}
+        >
+          <Ionicons name="locate" size={24} color="#fff" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -1021,6 +1128,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  followButton: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
     borderWidth: 2,
     borderColor: 'white',
   },

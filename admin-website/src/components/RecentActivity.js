@@ -53,7 +53,7 @@ const RecentActivity = () => {
   return (
     <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden h-full
                     hover:shadow-2xl transition-shadow duration-300">
-      <div className="px-8 py-6 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+      <div className="px-8 py-6 bg-gray-50 border-b border-gray-100">
         <h2 className="text-xl font-bold text-gray-900 flex items-center">
           <div className="p-2 bg-primary-100 rounded-xl mr-3">
             <AlertCircle className="w-5 h-5 text-primary-600" />

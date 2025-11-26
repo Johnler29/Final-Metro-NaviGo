@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import FleetManagement from './pages/FleetManagement';
 import DriverManagement from './pages/DriverManagement';
+import RouteManagement from './pages/RouteManagement';
 import ScheduleManagement from './pages/ScheduleManagement';
 import UserManagement from './pages/UserManagement';
 import PingNotifications from './pages/PingNotifications';
@@ -43,6 +44,7 @@ function App() {
                 <Route index element={<Dashboard />} />
                 <Route path="fleet" element={<FleetManagement />} />
                 <Route path="drivers" element={<DriverManagement />} />
+                <Route path="routes" element={<RouteManagement />} />
                 <Route path="schedules" element={<ScheduleManagement />} />
                 <Route path="users" element={<UserManagement />} />
                 <Route path="pings" element={<PingNotifications />} />

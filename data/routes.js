@@ -88,7 +88,8 @@ export const transformDatabaseRoute = (dbRoute) => {
     estimatedDuration: dbRoute.estimated_duration || 0,
     fare: parseFloat(dbRoute.fare) || 0,
     coordinates: coordinates,
-    stops: transformedStops
+    stops: transformedStops,
+    status: dbRoute.status || 'active' // Include status from database
   };
 };
 

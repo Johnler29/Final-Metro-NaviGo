@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { Users, Search, UserCheck, Trash2, Bus, MapPin } from 'lucide-react';
 import { notifications } from '../utils/notifications';
+import Skeleton, { SkeletonTable, SkeletonList } from '../components/Skeleton';
 
 // Cache busting comment - Driver Management v2.0 (Add Driver removed)
 
@@ -177,8 +178,31 @@ const DriverManagement = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">Loading drivers...</div>
+      <div className="space-y-6 animate-fade-in">
+        {/* Header Skeleton */}
+        <div className="modern-card p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton variant="title" width="250px" height="32px" className="mb-3" />
+              <Skeleton variant="text" width="400px" className="mb-2" />
+              <Skeleton variant="text" width="350px" />
+            </div>
+            <div className="flex space-x-3">
+              <Skeleton variant="button" width="150px" />
+              <Skeleton variant="button" width="130px" />
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Skeleton variant="card" height="120px" />
+          <Skeleton variant="card" height="120px" />
+          <Skeleton variant="card" height="120px" />
+        </div>
+
+        {/* Table Skeleton */}
+        <SkeletonTable rows={8} cols={6} />
       </div>
     );
   }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Sidebar from './Sidebar';
@@ -7,9 +7,19 @@ import LoadingSpinner from './LoadingSpinner';
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   const { user, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Handle page transitions
+  useEffect(() => {
+    setIsPageTransitioning(true);
+    const timer = setTimeout(() => {
+      setIsPageTransitioning(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -21,7 +31,7 @@ const Layout = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen bg-neutral-50 overflow-hidden">
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       
@@ -31,9 +41,17 @@ const Layout = () => {
         <Header onMenuClick={() => setSidebarOpen(true)} />
         
         {/* Page content */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50">
-          <div className="container mx-auto px-6 py-8 animate-fade-in">
-            <Outlet />
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-neutral-50">
+          <div 
+            className={`container mx-auto px-6 py-8 transition-all duration-300 ${
+              isPageTransitioning 
+                ? 'opacity-0 translate-y-2' 
+                : 'opacity-100 translate-y-0'
+            }`}
+          >
+            <div className="animate-fade-in">
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>

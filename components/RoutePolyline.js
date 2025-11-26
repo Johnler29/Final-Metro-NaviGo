@@ -1,7 +1,81 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Polyline, Marker } from 'react-native-maps';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+// Animated Stop Marker Component
+const AnimatedStopMarker = ({ stop, index, onPress, sequence }) => {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0.2)).current;
+
+  useEffect(() => {
+    // Start pulse animation
+    Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.3,
+            duration: 1500,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1500,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 1500,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0.2,
+            duration: 1500,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <View style={styles.stopMarkerContainer}>
+      <View style={styles.stopMarker}>
+        <Animated.View
+          style={[
+            styles.stopMarkerPulse,
+            {
+              transform: [{ scale: pulseAnim }],
+              opacity: fadeAnim,
+            },
+          ]}
+        />
+        <View style={styles.stopMarkerInner}>
+          <Ionicons name="location" size={20} color="#F59E0B" />
+        </View>
+        {sequence !== undefined && (
+          <View style={styles.stopSequenceBadge}>
+            <Text style={styles.stopSequenceText}>{sequence}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.stopMarkerLabel}>
+        <View style={styles.stopLabelIcon}>
+          <Ionicons name="bus-outline" size={12} color="#F59E0B" />
+        </View>
+        <Text style={styles.stopMarkerText} numberOfLines={1}>
+          {stop.name || `Stop ${index + 1}`}
+        </Text>
+      </View>
+    </View>
+  );
+};
 
 const RoutePolyline = ({ 
   route, 
@@ -28,6 +102,14 @@ const RoutePolyline = ({
     fare = 0,
     name = 'Route'
   } = route;
+
+  // Debug logging
+  if (showStops) {
+    console.log('📍 RoutePolyline - Route:', route.name);
+    console.log('📍 RoutePolyline - showStops:', showStops);
+    console.log('📍 RoutePolyline - stops count:', stops.length);
+    console.log('📍 RoutePolyline - stops data:', stops);
+  }
 
   // Calculate route segments for different colors (like Google Maps)
   const getRouteSegments = () => {
@@ -60,129 +142,198 @@ const RoutePolyline = ({
 
   return (
     <>
-      {/* Route segments with different colors */}
-      {routeSegments.map((segment, index) => (
-        <Polyline
-          key={`segment-${index}`}
-          coordinates={segment.coordinates}
-          strokeColor={segment.color}
-          strokeWidth={isSelected ? strokeWidth + 2 : strokeWidth}
-          strokeOpacity={isSelected ? 1.0 : 0.8}
-          onPress={handleRoutePress}
-        />
-      ))}
-
-      {/* Direction arrow (if enabled and we have enough points) */}
-      {showDirection && coordinates.length >= 2 && (
-        <Polyline
-          coordinates={coordinates.slice(-2)} // Last two points for direction
-          strokeColor={color}
-          strokeWidth={strokeWidth + 3}
-          strokeOpacity={0.9}
-        />
-      )}
-
-      {/* Route information bubble */}
-      {showInfoBubbles && showBubble && (
+      {/* Custom Start Pin */}
+      {coordinates.length > 0 && (
         <Marker
-          coordinate={bubblePosition}
+          coordinate={coordinates[0]}
+          title={`Start: ${route.name || 'Route'}`}
+          description={route.origin || 'Starting point'}
           anchor={{ x: 0.5, y: 1 }}
         >
-          <View style={styles.infoBubble}>
-            <View style={styles.bubbleContent}>
-              <View style={styles.bubbleHeader}>
-                <Ionicons name="bus" size={16} color="#4285F4" />
-                <Text style={styles.routeName}>{name}</Text>
-              </View>
-              <View style={styles.bubbleDetails}>
-                <View style={styles.detailRow}>
-                  <Ionicons name="time" size={14} color="#666" />
-                  <Text style={styles.detailText}>{estimatedDuration} min</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Ionicons name="cash" size={14} color="#666" />
-                  <Text style={styles.detailText}>₱{fare.toFixed(2)}</Text>
-                </View>
-              </View>
+          <View style={styles.customPinContainer}>
+            <View style={[styles.customPinLabel, styles.startPinLabel]}>
+              <Text style={styles.pinLabelText} numberOfLines={1}>
+                {route.origin || 'START'}
+              </Text>
             </View>
-            <View style={[styles.bubbleArrow, { borderTopColor: 'white' }]} />
+            <View style={[styles.customPin, styles.startPin]}>
+              <Ionicons name="location" size={26} color="white" />
+            </View>
+            <View style={[styles.pinShadow, styles.startPinShadow]} />
           </View>
         </Marker>
       )}
 
-      {/* Route stops markers */}
-      {showStops && stops.map((stop, index) => (
+      {/* Stop Markers - Always visible so users can see nearby stops */}
+      {showStops && stops.length > 0 && (() => {
+        console.log('📍 RoutePolyline - Rendering stops:', stops.length, 'stops for route:', route.name);
+        console.log('📍 Stops data:', stops);
+        
+        return stops.map((stop, index) => {
+          // Validate stop has coordinates
+          const stopLat = parseFloat(stop.latitude);
+          const stopLng = parseFloat(stop.longitude);
+          
+          if (isNaN(stopLat) || isNaN(stopLng)) {
+            console.warn('⚠️ Stop has invalid coordinates:', stop);
+            return null;
+          }
+          
+          // Check if this stop matches the start or end coordinates (to avoid duplicate markers)
+          // Use a more lenient comparison (0.001 degrees ≈ 111 meters)
+          const isStartStop = coordinates.length > 0 && 
+            Math.abs(stopLat - coordinates[0].latitude) < 0.001 &&
+            Math.abs(stopLng - coordinates[0].longitude) < 0.001;
+          const isEndStop = coordinates.length > 0 &&
+            Math.abs(stopLat - coordinates[coordinates.length - 1].latitude) < 0.001 &&
+            Math.abs(stopLng - coordinates[coordinates.length - 1].longitude) < 0.001;
+          
+          // Skip if it's the exact same as start/end pin (to avoid duplicates)
+          if (isStartStop || isEndStop) {
+            console.log('📍 Skipping stop (matches start/end):', stop.name);
+            return null;
+          }
+          
+          console.log('📍 Rendering stop marker:', stop.name, 'at', stopLat, stopLng);
+          
+          return (
+            <Marker
+              key={stop.id || `stop-${index}`}
+              coordinate={{
+                latitude: stopLat,
+                longitude: stopLng
+              }}
+              title={stop.name || `Stop ${index + 1}`}
+              description={stop.description || stop.address || 'Bus Stop'}
+              anchor={{ x: 0.5, y: 0.5 }}
+              onPress={() => onStopPress && onStopPress(stop)}
+            >
+              <AnimatedStopMarker 
+                stop={stop} 
+                index={index} 
+                onPress={onStopPress} 
+                sequence={stop.sequence || index + 1}
+              />
+            </Marker>
+          );
+        });
+      })()}
+
+      {/* Custom End Pin */}
+      {coordinates.length > 0 && (
         <Marker
-          key={`stop-${index}`}
-          coordinate={{
-            latitude: stop.latitude,
-            longitude: stop.longitude
-          }}
-          title={stop.name}
-          description={stop.description || `Stop ${index + 1}`}
-          onPress={() => onStopPress && onStopPress(stop, index)}
+          coordinate={coordinates[coordinates.length - 1]}
+          title={`End: ${route.name || 'Route'}`}
+          description={route.destination || 'Destination'}
+          anchor={{ x: 0.5, y: 1 }}
         >
-          <View style={[
-            styles.stopMarker,
-            { 
-              backgroundColor: index === 0 ? '#10B981' : // Start (green)
-                           index === stops.length - 1 ? '#EF4444' : // End (red)
-                           '#F59E0B' // Middle stops (orange)
-            }
-          ]}>
-            <Ionicons 
-              name={index === 0 ? "play" : index === stops.length - 1 ? "stop" : "ellipse"} 
-              size={12} 
-              color="white" 
-            />
+          <View style={styles.customPinContainer}>
+            <View style={[styles.customPinLabel, styles.endPinLabel]}>
+              <Text style={styles.pinLabelText} numberOfLines={1}>
+                {route.destination || 'END'}
+              </Text>
+            </View>
+            <View style={[styles.customPin, styles.endPin]}>
+              <Ionicons name="flag" size={24} color="white" />
+            </View>
+            <View style={[styles.pinShadow, styles.endPinShadow]} />
           </View>
         </Marker>
-      ))}
-
-      {/* Start and end markers with special styling */}
-      {coordinates.length > 0 && (
-        <>
-          {/* Start marker */}
-          <Marker
-            coordinate={coordinates[0]}
-            title={`Start: ${route.name || 'Route'}`}
-            description={route.origin || 'Starting point'}
-          >
-            <View style={[styles.endpointMarker, { backgroundColor: '#10B981' }]}>
-              <Ionicons name="play" size={16} color="white" />
-            </View>
-          </Marker>
-
-          {/* End marker */}
-          <Marker
-            coordinate={coordinates[coordinates.length - 1]}
-            title={`End: ${route.name || 'Route'}`}
-            description={route.destination || 'Destination'}
-          >
-            <View style={[styles.endpointMarker, { backgroundColor: '#EF4444' }]}>
-              <Ionicons name="stop" size={16} color="white" />
-            </View>
-          </Marker>
-        </>
       )}
     </>
   );
 };
 
 const styles = StyleSheet.create({
+  stopMarkerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   stopMarker: {
-    width: 24,
-    height: 24,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#F59E0B',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  stopMarkerInner: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  stopMarkerPulse: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F59E0B',
+    opacity: 0.2,
+    zIndex: 1,
+  },
+  stopMarkerLabel: {
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
+    maxWidth: 120,
+    minWidth: 60,
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  stopLabelIcon: {
+    marginRight: 2,
+  },
+  stopMarkerText: {
+    color: '#F59E0B',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  stopSequenceBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'white',
-    shadowColor: '#000',
+    borderColor: '#FFFFFF',
+    shadowColor: '#DC2626',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
     elevation: 5,
+    zIndex: 10,
+  },
+  stopSequenceText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   endpointMarker: {
     width: 32,
@@ -197,6 +348,91 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 8,
+  },
+  customPinContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customPinLabel: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 6,
+    maxWidth: 140,
+    minWidth: 80,
+  },
+  startPinLabel: {
+    backgroundColor: '#10B981',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  endPinLabel: {
+    backgroundColor: '#EF4444',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  pinLabelText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0, 0, 0, 0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  customPin: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 12,
+    zIndex: 1,
+  },
+  startPin: {
+    backgroundColor: '#10B981',
+    borderColor: 'white',
+  },
+  endPin: {
+    backgroundColor: '#EF4444',
+    borderColor: 'white',
+  },
+  pinShadow: {
+    position: 'absolute',
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    opacity: 0.25,
+    zIndex: 0,
+    bottom: -6,
+  },
+  startPinShadow: {
+    backgroundColor: '#10B981',
+  },
+  endPinShadow: {
+    backgroundColor: '#EF4444',
   },
   infoBubble: {
     alignItems: 'center',

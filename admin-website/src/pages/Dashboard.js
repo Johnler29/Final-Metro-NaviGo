@@ -4,6 +4,7 @@ import LiveMap from '../components/LiveMap';
 import MetricCard from '../components/MetricCard';
 import RecentActivity from '../components/RecentActivity';
 import PerformanceChart from '../components/PerformanceChart';
+import Skeleton, { SkeletonMetricCard, SkeletonChart, SkeletonMap, SkeletonCard } from '../components/Skeleton';
 import { 
   Bus, 
   Users, 
@@ -78,8 +79,40 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-12 h-12 border-3 border-gray-200 border-t-amber-500 rounded-full animate-spin"></div>
+      <div className="space-y-6 animate-fade-in">
+        {/* Header Skeleton */}
+        <div className="modern-card p-8">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton variant="title" width="200px" height="36px" className="mb-3" />
+              <Skeleton variant="text" width="300px" />
+            </div>
+            <Skeleton variant="card" width="150px" height="80px" className="hidden lg:block" />
+          </div>
+        </div>
+
+        {/* Metrics Grid Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <SkeletonMetricCard />
+          <SkeletonMetricCard />
+          <SkeletonMetricCard />
+        </div>
+
+        {/* Main Content Grid Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <SkeletonMap />
+          </div>
+          <div className="lg:col-span-1">
+            <SkeletonCard />
+          </div>
+        </div>
+
+        {/* Performance Charts Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SkeletonChart />
+          <SkeletonChart />
+        </div>
       </div>
     );
   }

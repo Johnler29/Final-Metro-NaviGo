@@ -435,6 +435,40 @@ export const SupabaseProvider = ({ children }) => {
   };
 
   const deleteRoute = async (id) => {
+    // First, unassign buses from this route (set route_id to NULL)
+    const { error: busesError } = await supabase
+      .from('buses')
+      .update({ route_id: null })
+      .eq('route_id', id);
+    
+    if (busesError) {
+      console.error('Error unassigning buses:', busesError);
+      throw busesError;
+    }
+    
+    // Delete all stops associated with this route
+    const { error: stopsError } = await supabase
+      .from('stops')
+      .delete()
+      .eq('route_id', id);
+    
+    if (stopsError) {
+      console.error('Error deleting stops:', stopsError);
+      throw stopsError;
+    }
+    
+    // Delete any schedules associated with this route
+    const { error: schedulesError } = await supabase
+      .from('schedules')
+      .delete()
+      .eq('route_id', id);
+    
+    if (schedulesError) {
+      console.error('Error deleting schedules:', schedulesError);
+      // Don't throw - schedules might not exist
+    }
+    
+    // Then delete the route
     const { error } = await supabase
       .from('routes')
       .delete()

@@ -7,16 +7,71 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSupabase } from '../contexts/SupabaseContext';
+import { getAllRoutes } from '../data/routes';
+import { supabaseHelpers } from '../lib/supabase';
 
 export default function RouteScreen({ navigation }) {
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
+  const [availableRoutes, setAvailableRoutes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  const { routes: dbRoutes } = useSupabase();
 
-  // Mock route data
+  // Load routes from Supabase on mount
+  useEffect(() => {
+    loadRoutes();
+  }, []);
+
+  const loadRoutes = async () => {
+    try {
+      setLoading(true);
+      const routes = await getAllRoutes(supabaseHelpers);
+      
+      // Transform database routes to the format expected by RouteScreen
+      const transformedRoutes = routes
+        .filter(route => {
+          // Only show active routes (or routes without status - default to showing them)
+          const routeStatus = route.status;
+          return routeStatus === 'active' || !routeStatus;
+        })
+        .map(route => ({
+          id: route.id,
+          routeNumber: route.routeNumber || route.route_number || 'N/A',
+          origin: route.origin || 'Unknown',
+          destination: route.destination || 'Unknown',
+          stops: (route.stops || []).map((stop, index) => ({
+            name: stop.name || stop.stop_name || `Stop ${index + 1}`,
+            time: stop.time || `00:${String(index * 15).padStart(2, '0')}`
+          })),
+          frequency: route.frequency || 'Every 30 minutes',
+          duration: route.estimatedDuration 
+            ? `${route.estimatedDuration} minutes` 
+            : 'Unknown',
+          fare: route.fare 
+            ? `₱${parseFloat(route.fare).toFixed(2)}` 
+            : 'Free',
+          status: route.status || 'active',
+        }));
+      
+      setAvailableRoutes(transformedRoutes);
+      console.log('✅ Loaded routes for RouteScreen:', transformedRoutes.length);
+    } catch (err) {
+      console.error('❌ Error loading routes:', err);
+      // Fallback to empty array on error
+      setAvailableRoutes([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Mock route data (fallback - should not be used if database works)
   const mockRoutes = [
     {
       id: '1',
@@ -79,10 +134,13 @@ export default function RouteScreen({ navigation }) {
     } else {
       setSearchResults([]);
     }
-  }, [origin, destination]);
+  }, [origin, destination, availableRoutes]);
 
   const searchRoutes = () => {
-    const results = mockRoutes.filter(route => 
+    // Use availableRoutes from database, fallback to mockRoutes if empty
+    const routesToSearch = availableRoutes.length > 0 ? availableRoutes : mockRoutes;
+    
+    const results = routesToSearch.filter(route => 
       route.origin.toLowerCase().includes(origin.toLowerCase()) ||
       route.destination.toLowerCase().includes(destination.toLowerCase()) ||
       route.stops.some(stop => 
@@ -279,7 +337,22 @@ export default function RouteScreen({ navigation }) {
         {!origin && !destination && (
           <View style={styles.resultsSection}>
             <Text style={styles.sectionTitle}>Available Routes</Text>
-            {mockRoutes.map(renderRouteCard)}
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#f59e0b" />
+                <Text style={styles.loadingText}>Loading routes...</Text>
+              </View>
+            ) : availableRoutes.length > 0 ? (
+              availableRoutes.map(renderRouteCard)
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="bus-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyText}>No routes available</Text>
+                <Text style={styles.emptySubtext}>
+                  Routes will appear here once added in the admin panel
+                </Text>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -592,6 +665,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 4,
+    fontFamily: 'System',
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+    fontFamily: 'System',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#999',
+    fontFamily: 'System',
+  },
+  emptySubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
     fontFamily: 'System',
   },
 }); 
