@@ -4,12 +4,12 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, ActivityIndicator, Text, TouchableOpacity, Modal } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { colors, radius } from './styles/uiTheme';
 
 // Import screens
 import HomeScreen from './screens/HomeScreen';
@@ -40,6 +40,11 @@ import SimpleDrawer from './components/SimpleDrawer';
 // Import contexts
 import { SupabaseProvider } from './contexts/SupabaseContext';
 import { DrawerProvider, useDrawer } from './contexts/DrawerContext';
+import { restoreDriverBackgroundTrackingIfNeeded } from './background/driverBackgroundTasks';
+
+// Import background task to ensure it's registered at app startup
+// This ensures TaskManager.defineTask is called before any location updates start
+import './background/driverBackgroundTasks';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -86,7 +91,7 @@ function AppTestHarness() {
 
   const TestView = ({ label = 'Bare View' }) => (
     <View style={styles.loadingContainer}>
-      <Text style={{ fontSize: 18, color: '#111' }}>{label}</Text>
+      <Text style={{ fontSize: 18, color: colors.textPrimary }}>{label}</Text>
       <Text style={{ marginTop: 8, color: '#666' }}>Step {step}</Text>
       <View style={{ flexDirection: 'row', marginTop: 16 }}>
         <TouchableOpacity
@@ -97,7 +102,7 @@ function AppTestHarness() {
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setStep(Math.min(6, step + 1))}
-          style={{ padding: 10, backgroundColor: '#f59e0b', borderRadius: 8 }}
+          style={{ padding: 10, backgroundColor: colors.brand, borderRadius: 8 }}
         >
           <Text style={{ color: '#fff' }}>Next</Text>
         </TouchableOpacity>
@@ -188,43 +193,45 @@ function AppTestHarness() {
       <ErrorBoundary>
         {renderStage()}
       </ErrorBoundary>
-      {/* Persistent Test Controls Overlay */}
-      <View
-        style={{
-          position: 'absolute',
-          bottom: 24,
-          left: 0,
-          right: 0,
-          alignItems: 'center',
-        }}
-        pointerEvents="box-none"
-      >
+      {/* Test controls should not block tab navigation when running full app (step 6) */}
+      {step < 6 && (
         <View
           style={{
-            flexDirection: 'row',
-            backgroundColor: 'rgba(255,255,255,0.9)',
-            padding: 8,
-            borderRadius: 12,
-            shadowColor: '#000',
-            shadowOpacity: 0.1,
-            shadowRadius: 6,
-            elevation: 3,
+            position: 'absolute',
+            bottom: 24,
+            left: 0,
+            right: 0,
+            alignItems: 'center',
           }}
+          pointerEvents="box-none"
         >
-          <TouchableOpacity
-            onPress={() => setStep(Math.max(0, step - 1))}
-            style={{ paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#e5e7eb', borderRadius: 8, marginRight: 8 }}
+          <View
+            style={{
+              flexDirection: 'row',
+              backgroundColor: 'rgba(255,255,255,0.9)',
+              padding: 8,
+              borderRadius: 12,
+              shadowColor: '#000',
+              shadowOpacity: 0.1,
+              shadowRadius: 6,
+              elevation: 3,
+            }}
           >
-            <Text>Back</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setStep(Math.min(6, step + 1))}
-            style={{ paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#f59e0b', borderRadius: 8 }}
-          >
-            <Text style={{ color: '#fff' }}>Next</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setStep(Math.max(0, step - 1))}
+              style={{ paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#e5e7eb', borderRadius: 8, marginRight: 8 }}
+            >
+              <Text>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setStep(Math.min(6, step + 1))}
+              style={{ paddingVertical: 8, paddingHorizontal: 14, backgroundColor: colors.brand, borderRadius: 8 }}
+            >
+              <Text style={{ color: '#fff' }}>Next</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -238,31 +245,50 @@ function PassengerTabNavigator({ navigation }) {
           let iconName;
 
           if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
+            iconName = 'home-outline';
           } else if (route.name === 'Routes') {
-            iconName = focused ? 'list' : 'list-outline';
+            iconName = 'bus-outline';
           } else if (route.name === 'Map') {
-            iconName = focused ? 'map' : 'map-outline';
+            iconName = 'map-outline';
           } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
+            iconName = 'person-outline';
           }
 
-          return <Ionicons name={iconName} size={size} color={color} />;
+          return (
+            <View
+              style={{
+                paddingHorizontal: focused ? 12 : 0,
+                paddingVertical: focused ? 6 : 0,
+                borderRadius: radius.pill,
+                backgroundColor: focused ? '#F5F5F5' : 'transparent',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name={iconName} size={size} color={color} />
+            </View>
+          );
         },
-        tabBarActiveTintColor: '#f59e0b',
-        tabBarInactiveTintColor: '#666',
+        tabBarActiveTintColor: colors.brand,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: 'white',
+          backgroundColor: '#FFFFFF',
           borderTopWidth: 1,
-          borderTopColor: '#f0f0f0',
+          borderTopColor: '#E5E7EB',
           paddingBottom: 8,
           paddingTop: 8,
           height: 70,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 8,
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
           elevation: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 0,
         },
         headerShown: false,
       })}
@@ -319,8 +345,8 @@ function DriverTabNavigator() {
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#f59e0b',
-        tabBarInactiveTintColor: '#666',
+        tabBarActiveTintColor: colors.brand,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
           backgroundColor: 'white',
           borderTopWidth: 1,
@@ -401,7 +427,7 @@ function DriverAuthWrapper({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4CAF50" />
+        <ActivityIndicator size="large" color={colors.success} />
       </View>
     );
   }
@@ -467,7 +493,7 @@ function AppContent() {
   return (
     <SupabaseProvider>
       <NavigationContainer>
-        <StatusBar style="light" backgroundColor="#f59e0b" />
+        <StatusBar style="light" backgroundColor={colors.brand} />
         <View style={styles.container}>
           {/* Simple Drawer Modal */}
           <SimpleDrawer
@@ -502,6 +528,12 @@ function AppContent() {
 }
 
 export default function App() {
+  // On cold start, attempt to restore any previously running driver background
+  // tracking task (for example, after the OS killed the process or device reboot).
+  useEffect(() => {
+    restoreDriverBackgroundTrackingIfNeeded();
+  }, []);
+
   if (TEST_MODE) {
     return <AppTestHarness />;
   }
@@ -519,13 +551,13 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.surfaceSubtle,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
   },
   loadingText: {
     marginTop: 10,

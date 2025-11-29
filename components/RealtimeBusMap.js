@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -37,7 +37,6 @@ const RealtimeBusMap = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [realtimeSubscription, setRealtimeSubscription] = useState(null);
   const [locationValidation, setLocationValidation] = useState({});
   const [arrivalTimes, setArrivalTimes] = useState({});
   const [availableRoutes, setAvailableRoutes] = useState([]);
@@ -48,6 +47,14 @@ const RealtimeBusMap = ({
   // Animation refs
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  
+  // Performance: Throttle real-time updates to prevent freezing
+  const lastUpdateTime = useRef({});
+  const pendingUpdates = useRef(new Map());
+  const updateTimer = useRef(null);
+  
+  // Throttle bus updates - only update UI every 5 seconds per bus (prevents lag/freezing)
+  const THROTTLE_MS = 5000; // Update UI at most every 5 seconds per bus
   const mapRef = useRef(null);
   const userLocationRef = useRef(userLocation);
   const selectedBusRef = useRef(null);
@@ -94,21 +101,6 @@ const RealtimeBusMap = ({
   const loadRoutes = useCallback(async () => {
     try {
       const routes = await getAllRoutes(supabaseHelpers);
-      console.log('✅ Loaded routes:', routes.length);
-      
-      // Debug: Log route details
-      routes.forEach(route => {
-        console.log(`📍 Route: ${route.name}`, {
-          id: route.id,
-          hasCoordinates: !!route.coordinates,
-          coordinatesCount: route.coordinates?.length || 0,
-          hasStops: route.stops?.length > 0,
-          stopsCount: route.stops?.length || 0,
-          origin: route.origin,
-          destination: route.destination
-        });
-      });
-      
       setAvailableRoutes(routes);
       
       // Set selected route if provided
@@ -129,117 +121,113 @@ const RealtimeBusMap = ({
     try {
       setLoading(true);
       setError(null);
-      
+
       if (!contextBuses || contextBuses.length === 0) {
-        console.log('⚠️ No buses available in context');
         setBuses([]);
+        setLoading(false); // IMPORTANT: Always set loading to false
         return;
       }
-      
-      console.log('🎯 RealtimeBusMap - Loading buses from context:', contextBuses.length);
-      
-      // Transform buses to match expected format - only show buses with active drivers/trips
-      const transformedBuses = contextBuses.map(bus => {
-        const route = routes?.find(r => r.id === bus.route_id);
-        
-        // Check if bus has an active driver session
-        const hasActiveDriver = bus.driver_id && bus.status === 'active';
-        const hasRecentLocation = bus.last_location_update && 
-          new Date(bus.last_location_update) > new Date(Date.now() - 5 * 60 * 1000); // Within last 5 minutes (stricter)
-        const hasValidCoordinates = bus.latitude && bus.longitude && 
-          !isNaN(bus.latitude) && !isNaN(bus.longitude);
-        
-        // Check if driver is actually online (has recent activity)
-        const isDriverOnline = hasRecentLocation && hasValidCoordinates;
-        
-        // Debug logging for each bus
-        console.log('🎯 RealtimeBusMap - Bus filter check:', {
-          bus_number: bus.bus_number,
-          driver_id: bus.driver_id,
-          status: bus.status,
-          hasActiveDriver,
-          hasRecentLocation,
-          hasValidCoordinates,
-          isDriverOnline,
-          lastUpdate: bus.last_location_update,
-          coords: { lat: bus.latitude, lng: bus.longitude }
-        });
-        
-        // Only show buses with active drivers AND recent location updates (driver is online)
-        if (!hasActiveDriver || !isDriverOnline) {
-          console.log('🎯 RealtimeBusMap - Skipping bus - driver offline or no recent location:', bus.bus_number, 'driver:', bus.driver_id, 'status:', bus.status, 'recent:', hasRecentLocation, 'coords:', bus.latitude, bus.longitude);
-          return null;
-        }
-        
-        // Get coordinates directly from the buses table
-        let lat = bus.latitude;
-        let lng = bus.longitude;
-        
-        // Fallback: if no coords, use sample coordinates
-        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
-          console.log('🚌 No valid coordinates for bus, using fallback location');
-          const sampleCoords = [
-            { lat: 14.3294, lng: 120.9366 }, // Dasmarinas Terminal
-            { lat: 14.4591, lng: 120.9468 }, // Bacoor
-            { lat: 14.5995, lng: 120.9842 }  // Manila City Hall
-          ];
-          const randomCoord = sampleCoords[Math.floor(Math.random() * sampleCoords.length)];
-          lat = randomCoord.lat;
-          lng = randomCoord.lng;
-          console.log('🚌 Using sample coordinates:', lat, lng);
-        }
-        
-        const transformedBus = {
-          bus_id: bus.id,
-          bus_name: bus.name || bus.bus_number,
-          tracking_status: bus.tracking_status || 'moving',
-          latitude: lat,
-          longitude: lng,
-          route_name: route?.name || route?.route_number || 'Unknown Route',
-          current_passengers: bus.current_passengers || 0,
-          capacity_percentage: bus.capacity_percentage || 0,
-          max_capacity: bus.max_capacity || 50,
-          location_status: 'live',
-          capacity_status: (bus.capacity_percentage || 0) >= 90 ? 'full' : 
-                          (bus.capacity_percentage || 0) >= 70 ? 'crowded' : 
-                          (bus.capacity_percentage || 0) >= 40 ? 'moderate' : 'light',
-          is_moving: (bus.tracking_status || 'moving') === 'moving',
-          last_location_update: bus.updated_at || new Date().toISOString(),
-          validation: { isValid: true, reason: 'context_data' }
-        };
-        
-        console.log('🎯 RealtimeBusMap - Transformed bus:', transformedBus.bus_name, 'at', transformedBus.latitude, transformedBus.longitude);
-        return transformedBus;
-      }).filter(bus => {
-        if (!bus) return false; // Filter out null buses (inactive drivers)
-        const isValid = typeof bus.latitude === 'number' && typeof bus.longitude === 'number';
-        console.log('🎯 RealtimeBusMap - Bus filter check:', bus.bus_name, 'Valid:', isValid);
-        return isValid;
+
+      // We need the merged list both for state and for ETA calculations
+      let nextBuses = [];
+
+      setBuses(prevBuses => {
+        const prevMap = new Map(prevBuses.map(b => [b.bus_id, b]));
+
+        nextBuses = contextBuses
+          .map(bus => {
+            const route = routes?.find(r => r.id === bus.route_id);
+
+            const hasActiveDriver = bus.driver_id && bus.status === 'active';
+            const hasValidCoordinates =
+              typeof bus.latitude === 'number' &&
+              typeof bus.longitude === 'number' &&
+              !isNaN(bus.latitude) &&
+              !isNaN(bus.longitude);
+
+            if (!hasActiveDriver) {
+              return null;
+            }
+
+            // Start with database coordinates
+            let lat = hasValidCoordinates ? bus.latitude : null;
+            let lng = hasValidCoordinates ? bus.longitude : null;
+
+            // If new data has no coordinates, keep the last known ones (avoid snapping back)
+            if (!hasValidCoordinates) {
+              const prev = prevMap.get(bus.id);
+              if (prev && typeof prev.latitude === 'number' && typeof prev.longitude === 'number') {
+                lat = prev.latitude;
+                lng = prev.longitude;
+              } else {
+                // No previous coordinates to fall back to – don't show this bus yet
+                return null;
+              }
+            }
+
+            const transformedBus = {
+              bus_id: bus.id,
+              bus_name: bus.name || bus.bus_number,
+              tracking_status: bus.tracking_status || 'moving',
+              latitude: lat,
+              longitude: lng,
+              route_name: route?.name || route?.route_number || 'Unknown Route',
+              current_passengers: bus.current_passengers || 0,
+              capacity_percentage: bus.capacity_percentage || 0,
+              max_capacity: bus.max_capacity || 50,
+              location_status: 'live',
+              capacity_status:
+                (bus.capacity_percentage || 0) >= 90
+                  ? 'full'
+                  : (bus.capacity_percentage || 0) >= 70
+                  ? 'crowded'
+                  : (bus.capacity_percentage || 0) >= 40
+                  ? 'moderate'
+                  : 'light',
+              is_moving: (bus.tracking_status || 'moving') === 'moving',
+              last_location_update: bus.updated_at || new Date().toISOString(),
+              validation: { isValid: true, reason: 'context_data' },
+            };
+
+            return transformedBus;
+          })
+          .filter(bus => {
+            if (!bus) return false;
+            const isValid =
+              typeof bus.latitude === 'number' &&
+              typeof bus.longitude === 'number' &&
+              !isNaN(bus.latitude) &&
+              !isNaN(bus.longitude);
+            return isValid;
+          });
+
+        return nextBuses;
       });
-      
-      console.log('✅ Loaded buses from context:', transformedBuses.length, 'buses');
-      setBuses(transformedBuses);
-      
+
       setLastUpdate(new Date());
-      
-      // Calculate arrival times if passenger location is available
-      if (showArrivalTimes && initialRegion) {
-        await calculateArrivalTimesForBuses(transformedBuses);
+
+      // IMPORTANT: Clear loading state FIRST, then do async operations
+      // This ensures map appears immediately
+      setLoading(false);
+
+      // Calculate arrival times AFTER loading is cleared (non-blocking)
+      // Use the most recent passenger location (if available) for ETA calculations
+      if (showArrivalTimes && (userLocationRef.current || initialRegion) && nextBuses.length > 0) {
+        calculateArrivalTimesForBuses(nextBuses).catch(err => {
+          console.warn('Error calculating arrival times (non-blocking):', err);
+        });
       }
-      
+
       fadeInBus();
-      
     } catch (err) {
       console.error('Error loading buses:', err);
       setError('Failed to load bus locations');
-    } finally {
-      setLoading(false);
+      setLoading(false); // Always clear loading on error
     }
-  }, [contextBuses, routes, initialRegion, showArrivalTimes]);
+  }, [contextBuses, routes, showArrivalTimes]);
 
   // Refresh buses function for real-time updates
   const refreshBuses = useCallback(async () => {
-    console.log('🔄 Refreshing buses due to location update...');
     await loadBuses();
   }, [loadBuses]);
 
@@ -267,14 +255,17 @@ const RealtimeBusMap = ({
 
   // Calculate arrival times for all buses
   const calculateArrivalTimesForBuses = async (busList) => {
-    if (!initialRegion || !supabase) return;
+    if (!supabase) return;
+    
+    const passengerLocation = userLocationRef.current || initialRegion;
+    if (!passengerLocation) return;
     
     try {
       const arrivalPromises = busList.map(async (bus) => {
         const { data, error } = await supabase.rpc('calculate_arrival_times', {
           p_bus_id: bus.bus_id,
-          p_passenger_lat: initialRegion.latitude,
-          p_passenger_lng: initialRegion.longitude
+          p_passenger_lat: passengerLocation.latitude,
+          p_passenger_lng: passengerLocation.longitude
         });
         
         if (error) throw error;
@@ -301,20 +292,16 @@ const RealtimeBusMap = ({
     // Check if supabase is available
     if (!supabase) {
       console.warn('Supabase client not available for real-time subscription');
-      return;
+      return null;
     }
 
     // Check if supabase has real-time capabilities
     if (!supabase.channel) {
       console.error('Supabase real-time not available - channel method missing');
-      return;
+      return null;
     }
 
     try {
-      console.log('🎯 RealtimeBusMap - Setting up real-time subscription for buses table');
-      console.log('🎯 Supabase client:', supabase);
-      console.log('🎯 Supabase URL:', supabase.supabaseUrl);
-      
       // Create a more robust subscription with better error handling
       const subscription = supabase
         .channel('bus_location_updates', {
@@ -323,42 +310,17 @@ const RealtimeBusMap = ({
             presence: { key: 'bus-location-updates' }
           }
         })
-        .on('postgres_changes', 
-          { 
-            event: 'UPDATE', 
-            schema: 'public', 
-            table: 'buses',
-            filter: 'tracking_status=eq.moving'
-          }, 
-          (payload) => {
-            console.log('🎯 Real-time bus update received (moving buses only):', payload);
-            handleBusUpdate(payload);
-          }
-        )
-        .on('postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'buses',
-            filter: 'tracking_status=eq.stopped'
-          },
-          (payload) => {
-            console.log('🎯 Real-time bus update received (stopped buses):', payload);
-            handleBusUpdate(payload);
-          }
-        )
         .on('postgres_changes',
           {
             event: 'UPDATE',
             schema: 'public',
             table: 'buses'
-            // No filter - catch all bus updates (including location changes)
+            // Single subscription for all bus updates (throttled to prevent freezing)
           },
           (payload) => {
-            console.log('🎯 Real-time bus update received (all buses):', payload);
             // Only handle if it's a location update (latitude/longitude changed)
             if (payload.new.latitude != null && payload.new.longitude != null) {
-              handleBusUpdate(payload);
+              handleBusUpdateThrottled(payload);
             }
           }
         )
@@ -369,20 +331,7 @@ const RealtimeBusMap = ({
             table: 'buses'
           },
           (payload) => {
-            console.log('🎯 Real-time bus insert received:', payload);
             handleBusInsert(payload);
-          }
-        )
-        .on('postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'location_updates'
-          },
-          (payload) => {
-            console.log('🎯 Real-time location update received:', payload);
-            // Refresh buses data when new location update is inserted
-            refreshBuses();
           }
         )
         .on('postgres_changes',
@@ -393,7 +342,6 @@ const RealtimeBusMap = ({
             filter: 'tracking_status=eq.offline'
           },
           (payload) => {
-            console.log('🎯 Real-time bus went offline:', payload);
             // Remove offline buses from the map
             setBuses(prevBuses => 
               prevBuses.filter(bus => bus.bus_id !== payload.new.id)
@@ -401,14 +349,8 @@ const RealtimeBusMap = ({
           }
         )
         .subscribe((status) => {
-          console.log('🎯 Real-time subscription status:', status);
           if (status === 'SUBSCRIBED') {
-            console.log('✅ Real-time subscription is active and ready to receive updates');
-            // Test the subscription by triggering a test update
-            setTimeout(() => {
-              console.log('🧪 Testing real-time subscription...');
-              // This will help verify if real-time is working
-            }, 2000);
+            // subscription is active
           } else if (status === 'CHANNEL_ERROR') {
             console.error('❌ Real-time subscription failed - check if real-time is enabled for buses table');
             console.error('💡 Run the SQL script: sql/enable-realtime-bus-tracking.sql');
@@ -416,23 +358,21 @@ const RealtimeBusMap = ({
             console.error('❌ Real-time subscription timed out');
           } else if (status === 'CLOSED') {
             console.error('❌ Real-time subscription closed');
-          } else {
-            console.log('🎯 Real-time subscription status:', status);
           }
         });
 
-      setRealtimeSubscription(subscription);
+      return subscription;
     } catch (error) {
       console.error('Error setting up real-time subscription:', error);
       console.error('Error details:', error.message, error.stack);
       console.error('💡 Make sure real-time is enabled for the buses table in Supabase');
+      return null;
     }
-  }, [supabase, refreshBuses]);
+  }, [supabase, refreshBuses, handleBusUpdateThrottled, handleBusInsert]);
 
-  // Handle bus updates from real-time subscription
-  const handleBusUpdate = useCallback(async (payload) => {
+  // Process bus update (defined first for throttling)
+  const processBusUpdate = useCallback((payload) => {
     try {
-      console.log('🎯 Handling bus update:', payload);
       const updatedBus = payload.new;
       const busId = updatedBus.id;
       
@@ -442,25 +382,37 @@ const RealtimeBusMap = ({
                                    !isNaN(updatedBus.latitude) && 
                                    !isNaN(updatedBus.longitude);
       const hasActiveDriver = updatedBus.driver_id && 
-                              (updatedBus.status === 'active' || updatedBus.status === undefined);
-      const isDriverOffline = !hasActiveDriver || !hasValidCoordinates;
+                              updatedBus.status === 'active';
       
-      // Check if bus has recent location update (within last 5 minutes)
-      const hasRecentLocation = updatedBus.last_location_update && 
-        new Date(updatedBus.last_location_update) > new Date(Date.now() - 5 * 60 * 1000);
-      
-      // If driver went off duty or coordinates are invalid, remove bus from map
-      if (isDriverOffline || !hasRecentLocation) {
-        console.log('🚫 Driver went off duty or bus went offline, removing from map:', busId);
+      // If driver went off duty, remove bus from map (immediate, no throttling)
+      if (!hasActiveDriver) {
         setBuses(prevBuses => prevBuses.filter(bus => bus.bus_id !== busId));
         return;
       }
+
+      // If we don't have valid coordinates in this update, keep the previous
+      // position instead of snapping the marker back to a placeholder.
+      if (!hasValidCoordinates) {
+        return;
+      }
       
-      // Update bus in state
+      // Update bus in state (batched/throttled) - only update if coordinates actually changed
       setBuses(prevBuses => {
+        const existingBus = prevBuses.find(bus => bus.bus_id === busId);
+        
+        // Check if coordinates actually changed (avoid unnecessary re-renders)
+        const coordsChanged = !existingBus || 
+          existingBus.latitude !== updatedBus.latitude || 
+          existingBus.longitude !== updatedBus.longitude;
+        
+        // Performance: Only update if coordinates changed (skip duplicate updates)
+        if (existingBus && !coordsChanged) {
+          // Coordinates haven't changed - skip update to prevent re-render
+          return prevBuses;
+        }
+        
         const updatedBuses = prevBuses.map(bus => {
           if (bus.bus_id === busId) {
-            console.log('🎯 Updating existing bus:', busId, 'New coords:', updatedBus.latitude, updatedBus.longitude);
             return {
               ...bus,
               latitude: updatedBus.latitude,
@@ -475,10 +427,10 @@ const RealtimeBusMap = ({
           return bus;
         });
         
-        // If bus not in current list, add it only if it has valid data
-        if (!prevBuses.find(bus => bus.bus_id === busId) && hasValidCoordinates && hasActiveDriver) {
-          console.log('🎯 Adding new bus from real-time update:', busId);
+        // If bus not in current list, add it if it has active driver AND valid coordinates
+        if (!prevBuses.find(bus => bus.bus_id === busId) && hasActiveDriver && hasValidCoordinates) {
           const route = routes?.find(r => r.id === updatedBus.route_id);
+
           const newBus = {
             bus_id: busId,
             bus_name: updatedBus.name || updatedBus.bus_number,
@@ -500,24 +452,74 @@ const RealtimeBusMap = ({
           updatedBuses.push(newBus);
         }
         
-        // Filter out any buses with invalid coordinates (safety check)
-        return updatedBuses.filter(bus => 
-          bus.latitude != null && 
-          bus.longitude != null && 
-          !isNaN(bus.latitude) && 
-          !isNaN(bus.longitude)
-        );
+        // Filter out any buses with invalid coordinates
+        return updatedBuses.filter(bus => {
+          const hasValidCoords = bus.latitude != null && 
+            bus.longitude != null && 
+            !isNaN(bus.latitude) && 
+            !isNaN(bus.longitude);
+          return hasValidCoords; // Placeholder coordinates are valid numbers, so this should pass
+        });
       });
       
     } catch (err) {
       console.error('Error handling bus update:', err);
     }
   }, [routes]);
+  
+  // Handle bus updates from real-time subscription with throttling
+  const handleBusUpdateThrottled = useCallback(async (payload) => {
+    try {
+      const updatedBus = payload.new;
+      const busId = updatedBus.id;
+      const now = Date.now();
+      
+      // PERFORMANCE FIX: Throttle updates to prevent freezing
+      // Only process updates every THROTTLE_MS milliseconds per bus
+      const lastUpdate = lastUpdateTime.current[busId] || 0;
+      const timeSinceLastUpdate = now - lastUpdate;
+      
+      // Immediate processing for critical updates (driver off duty, etc.)
+      const isCriticalUpdate = !updatedBus.driver_id || updatedBus.status !== 'active';
+      
+      if (!isCriticalUpdate && timeSinceLastUpdate < THROTTLE_MS) {
+        // Store pending update for later processing
+        pendingUpdates.current.set(busId, payload);
+        
+        // Schedule batch update if not already scheduled
+        if (!updateTimer.current) {
+          updateTimer.current = setTimeout(() => {
+            // Process all pending updates
+            const updatesToProcess = Array.from(pendingUpdates.current.values());
+            pendingUpdates.current.clear();
+            updateTimer.current = null;
+            
+            // Process the most recent update for each bus
+            updatesToProcess.forEach(p => {
+              if (p && p.new) {
+                const busId = p.new.id;
+                lastUpdateTime.current[busId] = Date.now();
+                processBusUpdate(p);
+              }
+            });
+          }, THROTTLE_MS - timeSinceLastUpdate);
+        }
+        
+        return; // Skip this update, will be processed in batch
+      }
+      
+      // Update timestamp and process immediately
+      lastUpdateTime.current[busId] = now;
+      processBusUpdate(payload);
+      
+    } catch (err) {
+      console.error('Error handling bus update:', err);
+    }
+  }, [processBusUpdate]);
 
   // Handle bus inserts from real-time subscription
   const handleBusInsert = useCallback(async (payload) => {
     try {
-      console.log('🎯 Handling bus insert:', payload);
       const newBus = payload.new;
       const busId = newBus.id;
       
@@ -527,11 +529,10 @@ const RealtimeBusMap = ({
                                    !isNaN(newBus.latitude) && 
                                    !isNaN(newBus.longitude);
       const hasActiveDriver = newBus.driver_id && 
-                              (newBus.status === 'active' || newBus.status === undefined);
+                              newBus.status === 'active';
       
       // Only add bus if it has valid coordinates and active driver
       if (!hasValidCoordinates || !hasActiveDriver) {
-        console.log('🚫 Skipping bus insert - invalid coordinates or inactive driver:', busId);
         return;
       }
       
@@ -561,7 +562,6 @@ const RealtimeBusMap = ({
           validation: { isValid: true, reason: 'realtime_insert' }
         };
         
-        console.log('🎯 Adding new bus from insert:', transformedBus.bus_name);
         return [...prevBuses, transformedBus];
       });
       
@@ -606,45 +606,59 @@ const RealtimeBusMap = ({
     return '🚌';
   };
 
-  // Render bus marker
-  const renderBusMarker = (bus) => {
-    const isSelected = selectedBusId === bus.bus_id;
-    const markerColor = getBusMarkerColor(bus);
-    
-    // Debug logging
-    console.log('🎯 RealtimeBusMap - Rendering bus marker:', bus.bus_id, bus.bus_name, 'at', bus.latitude, bus.longitude);
-    if (isSelected) {
-      console.log('🎯 RealtimeBusMap - This is the selected bus!');
+  // Get bus marker color based on status
+  const getBusMarkerColorSafe = useCallback((bus) => {
+    if (!bus) return '#3B82F6';
+    if (bus.location_status === 'offline') return '#9CA3AF';
+    if (bus.capacity_status === 'full') return '#EF4444';
+    if (bus.capacity_status === 'crowded') return '#F59E0B';
+    if (bus.is_moving) return '#10B981';
+    return '#3B82F6';
+  }, []);
+
+  // Render bus marker - simplified to prevent crashes
+  const renderBusMarker = useCallback((bus) => {
+    if (!bus || !bus.bus_id || bus.latitude == null || bus.longitude == null) {
+      return null;
     }
     
-    return (
-      <Marker
-        key={bus.bus_id}
-        coordinate={{
-          latitude: bus.latitude,
-          longitude: bus.longitude
-        }}
-        title={bus.bus_name}
-        description={`${bus.route_name || 'Unknown Route'} • ${bus.capacity_status || 'unknown'} • ${bus.location_status || 'unknown'}`}
-        onPress={() => {
-          console.log('🎯 RealtimeBusMap - Bus marker pressed:', bus.bus_id);
-          if (onBusSelect) {
-            onBusSelect(bus);
-          }
-        }}
-      >
-        <View style={[
-          styles.busMarker,
-          {
-            backgroundColor: markerColor,
-            transform: [{ scale: isSelected ? 1.2 : 1 }]
-          }
-        ]}>
-          <Text style={styles.busIcon}>🚌</Text>
-        </View>
-      </Marker>
-    );
-  };
+    try {
+      const isSelected = selectedBusId === bus.bus_id;
+      const markerColor = getBusMarkerColorSafe(bus);
+      
+      return (
+        <Marker
+          key={bus.bus_id}
+          coordinate={{
+            latitude: Number(bus.latitude),
+            longitude: Number(bus.longitude)
+          }}
+          title={bus.bus_name || 'Bus'}
+          description={`${bus.route_name || 'Unknown Route'} • ${bus.capacity_status || 'unknown'}`}
+          onPress={() => {
+            if (onBusSelect) {
+              onBusSelect(bus);
+            }
+          }}
+          tracksViewChanges={false}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          <View style={[
+            styles.busMarker,
+            {
+              backgroundColor: markerColor,
+              transform: [{ scale: isSelected ? 1.2 : 1 }]
+            }
+          ]}>
+            <Text style={styles.busIcon}>🚌</Text>
+          </View>
+        </Marker>
+      );
+    } catch (error) {
+      console.error('Error rendering bus marker:', error);
+      return null;
+    }
+  }, [selectedBusId, onBusSelect, getBusMarkerColorSafe]);
 
   // Render arrival time info
   const renderArrivalInfo = (bus) => {
@@ -671,12 +685,9 @@ const RealtimeBusMap = ({
   // Focus on selected bus when selectedBusId changes (only if a bus is selected)
   useEffect(() => {
     if (selectedBusId && buses.length > 0 && mapRef.current) {
-      console.log('🎯 RealtimeBusMap - Focusing on selected bus:', selectedBusId);
       setFollowUserLocation(false); // Stop following user when bus is selected
-      console.log('🎯 RealtimeBusMap - Available bus IDs:', buses.map(bus => bus.bus_id));
       const selectedBus = buses.find(bus => bus.bus_id === selectedBusId);
       if (selectedBus) {
-        console.log('🎯 RealtimeBusMap - Found selected bus:', selectedBus.bus_name, 'at', selectedBus.latitude, selectedBus.longitude);
         const region = {
           latitude: selectedBus.latitude,
           longitude: selectedBus.longitude,
@@ -689,9 +700,6 @@ const RealtimeBusMap = ({
           console.warn('animateToRegion failed:', e?.message || e);
         }
       } else {
-        console.log('🎯 RealtimeBusMap - Selected bus not found in buses');
-        console.log('🎯 RealtimeBusMap - Looking for:', selectedBusId);
-        console.log('🎯 RealtimeBusMap - Available buses:', buses.map(bus => ({ id: bus.bus_id, name: bus.bus_name })));
       }
     } else if (!selectedBusId) {
       // When no bus is selected, follow user location
@@ -723,9 +731,7 @@ const RealtimeBusMap = ({
             longitudeDelta: 0.01,
           };
           try {
-            // Smoothly follow the selected bus as it moves
             mapRef.current.animateToRegion(region, 1000);
-            console.log('📍 RealtimeBusMap - Following selected bus:', selectedBus.bus_name, 'at', selectedBus.latitude, selectedBus.longitude);
           } catch (e) {
             console.warn('Failed to follow selected bus:', e?.message || e);
           }
@@ -745,12 +751,9 @@ const RealtimeBusMap = ({
     // Don't follow if user recently interacted with the map (within last 2 seconds)
     const timeSinceInteraction = Date.now() - lastUserInteractionTime.current;
     if (isUserInteractingRef.current || timeSinceInteraction < 2000) {
-      console.log('📍 RealtimeBusMap - Skipping follow: user is interacting with map');
       return;
     }
 
-    console.log('📍 RealtimeBusMap - Following user location:', userLocation.latitude, userLocation.longitude);
-    
     const region = {
       latitude: userLocation.latitude,
       longitude: userLocation.longitude,
@@ -772,24 +775,38 @@ const RealtimeBusMap = ({
     }
   }, [buses, onBusesLoaded]);
 
-  // Load buses and routes on mount
+  // Setup real-time subscription (recreates when handlers change)
+  useEffect(() => {
+    if (!supabase) return;
+
+    const subscription = setupRealtimeSubscription();
+
+    return () => {
+      if (subscription && supabase) {
+        try {
+          supabase.removeChannel(subscription);
+        } catch (e) {
+          console.warn('Error removing Supabase channel:', e?.message || e);
+        }
+      }
+    };
+  }, [setupRealtimeSubscription, supabase]);
+
+  // Load routes and buses when dependencies change
   useEffect(() => {
     loadRoutes();
     loadBuses();
-    setupRealtimeSubscription();
+  }, [loadRoutes, loadBuses]);
+
+  // Start pulse animation only once on mount
+  useEffect(() => {
     startPulseAnimation();
-    
-    return () => {
-      if (realtimeSubscription && supabase) {
-        supabase.removeChannel(realtimeSubscription);
-      }
-    };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount - animation doesn't depend on props/context
 
   // Debug map region
   useEffect(() => {
     if (initialRegion) {
-      console.log('🎯 RealtimeBusMap - Initial map region:', initialRegion);
     }
   }, [initialRegion]);
 
@@ -820,6 +837,17 @@ const RealtimeBusMap = ({
     const interval = setInterval(loadBuses, 30000);
     return () => clearInterval(interval);
   }, [loadBuses]);
+
+  // Auto-hide loading after 2 seconds as safety fallback
+  useEffect(() => {
+    if (loading) {
+      const timeout = setTimeout(() => {
+        console.warn('⚠️ Loading timeout - forcing loading state to false');
+        setLoading(false);
+      }, 2000); // 2 second safety timeout
+      return () => clearTimeout(timeout);
+    }
+  }, [loading]);
 
   if (loading) {
     return (
@@ -868,10 +896,22 @@ const RealtimeBusMap = ({
         provider={PROVIDER_GOOGLE}
         apiKey={getGoogleMapsApiKey()}
         showsUserLocation
-        showsMyLocationButton
-        showsCompass
-        showsScale
+        showsMyLocationButton={false}
+        showsCompass={false}
+        showsScale={false}
         mapType="standard"
+        moveOnMarkerPress={false}
+        pitchEnabled={false}
+        rotateEnabled={false}
+        // Allow full, smooth interaction with the map
+        scrollEnabled
+        zoomEnabled
+        loadingEnabled={false}
+        // Disable aggressive caching so gestures always feel responsive
+        cacheEnabled={false}
+        // Give users a wider zoom range
+        maxZoomLevel={20}
+        minZoomLevel={0}
         onUserLocationChange={(event) => {
           // Don't auto-follow if user is interacting with the map
           const timeSinceInteraction = Date.now() - lastUserInteractionTime.current;
@@ -904,7 +944,7 @@ const RealtimeBusMap = ({
           isUserInteractingRef.current = true;
           lastUserInteractionTime.current = Date.now();
           setFollowUserLocation(false);
-          console.log('📍 User started dragging map - disabling auto-follow');
+          // Performance: Removed console.log
         }}
         onRegionChangeComplete={(region) => {
           // User finished moving the map
@@ -913,17 +953,23 @@ const RealtimeBusMap = ({
             // This was likely a user interaction, not programmatic
             isUserInteractingRef.current = false;
             // Keep followUserLocation disabled - user manually moved the map
-            console.log('📍 User finished moving map - keeping auto-follow disabled');
+            // Performance: Removed console.log
           } else {
             // This was likely programmatic, reset the flag
             isUserInteractingRef.current = false;
           }
         }}
         onError={(error) => {
-          console.error('Map error:', error);
-          if (error.nativeEvent?.message?.includes('quota') || 
-              error.nativeEvent?.message?.includes('exceeded')) {
-            setError('Map disabled because Quota is EXCEEDED');
+          try {
+            console.error('Map error:', error);
+            const errorMsg = error?.nativeEvent?.message || error?.message || '';
+            if (errorMsg.includes('quota') || errorMsg.includes('exceeded')) {
+              setError('Map disabled because Quota is EXCEEDED');
+            } else if (errorMsg) {
+              console.warn('Map error (non-fatal):', errorMsg);
+            }
+          } catch (e) {
+            console.error('Error handling map error:', e);
           }
         }}
       >
@@ -936,6 +982,7 @@ const RealtimeBusMap = ({
             }}
             title="Your Location"
             description="Current position"
+            tracksViewChanges={false}
           >
             <View style={styles.userMarker}>
               <Ionicons name="person" size={20} color="white" />
@@ -947,18 +994,11 @@ const RealtimeBusMap = ({
         {availableRoutes.map((route) => {
           // Only render if route has coordinates
           if (!route.coordinates || route.coordinates.length < 2) {
-            console.log('⚠️ Route missing coordinates - cannot show pins:', route.name, {
-              hasCoordinates: !!route.coordinates,
-              coordinatesLength: route.coordinates?.length || 0,
-              hasStops: route.stops?.length > 0,
-              stopsCount: route.stops?.length || 0
-            });
+            // Performance: Removed console.log from render loop
             return null;
           }
           
-          console.log('✅ Rendering route pins for:', route.name, 'with', route.coordinates.length, 'coordinates');
-          console.log('📍 Route stops count:', route.stops?.length || 0);
-          console.log('📍 Route stops data:', route.stops);
+          // Route rendering optimized - removed console logs for performance
           
           return (
             <RoutePolyline
@@ -973,19 +1013,8 @@ const RealtimeBusMap = ({
           );
         })}
         
-        {/* Bus markers */}
-        {console.log('🎯 RealtimeBusMap - Rendering', buses.length, 'bus markers')}
-        {buses.length > 0 ? buses.map(renderBusMarker) : (
-          <Marker
-            coordinate={{ latitude: 14.4791, longitude: 120.8969 }}
-            title="Test Marker"
-            description="This is a test marker to verify map rendering"
-          >
-            <View style={[styles.busMarker, { backgroundColor: 'red' }]}>
-              <Text style={styles.busIcon}>🚌</Text>
-            </View>
-          </Marker>
-        )}
+        {/* Bus markers - with error handling */}
+        {buses.length > 0 && buses.filter(bus => bus && bus.bus_id && bus.latitude != null && bus.longitude != null).map(renderBusMarker)}
       </MapView>
       
       {/* Re-enable follow user location button */}
@@ -1035,6 +1064,11 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#6B7280',
+  },
+  loadingSubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#9CA3AF',
   },
   errorContainer: {
     flex: 1,

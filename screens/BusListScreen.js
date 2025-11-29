@@ -6,11 +6,11 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Alert,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, radius, shadows } from '../styles/uiTheme';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { getLocationStatus, getCapacityStatus, formatTime } from '../utils/locationUtils';
 
@@ -138,13 +138,14 @@ export default function BusListScreen({ navigation, route }) {
   };
 
   const getStatusColor = (status) => {
+    // Use palette-only colors: orange for active, gray for others
     switch (status) {
       case 'active':
-        return '#22c55e';
+        return colors.brand;
       case 'inactive':
-        return '#FF6B6B';
+        return colors.textSecondary;
       default:
-        return '#FF9800';
+        return colors.textSecondary;
     }
   };
 
@@ -161,17 +162,14 @@ export default function BusListScreen({ navigation, route }) {
 
   const getPwdSeatStatus = (pwdSeatsAvailable, pwdSeats) => {
     if (pwdSeatsAvailable > 0) {
-      return { text: `${pwdSeatsAvailable} Available`, color: '#22c55e' };
-    } else {
-      return { text: 'Full', color: '#FF6B6B' };
+      return { text: `${pwdSeatsAvailable} Available`, color: colors.success };
     }
+    return { text: 'Full', color: colors.textSecondary };
   };
 
-  const getCapacityColor = (percentage) => {
-    if (percentage <= 25) return '#22c55e'; // Green
-    if (percentage <= 50) return '#FFC107'; // Yellow
-    if (percentage <= 75) return '#FF9800'; // Orange
-    return '#F44336'; // Red
+  const getCapacityColor = () => {
+    // Single accent color for capacity to avoid extra palette variants
+    return colors.brand;
   };
 
   const getCapacityStatus = (percentage) => {
@@ -270,18 +268,18 @@ export default function BusListScreen({ navigation, route }) {
         <View style={styles.busDetails}>
           <View style={styles.detailRow}>
             <View style={styles.detailItem}>
-              <Ionicons name="time" size={16} color="#666" />
+              <Ionicons name="time" size={16} color={colors.textSecondary} />
               <Text style={styles.detailText}>ETA: {item.eta}</Text>
             </View>
             <View style={styles.detailItem}>
-              <Ionicons name="location" size={16} color="#666" />
+              <Ionicons name="location" size={16} color={colors.textSecondary} />
               <Text style={styles.detailText}>{item.distance}</Text>
             </View>
           </View>
 
           <View style={styles.detailRow}>
             <View style={styles.detailItem}>
-              <Ionicons name="card" size={16} color="#666" />
+              <Ionicons name="card" size={16} color={colors.textSecondary} />
               <Text style={styles.detailText}>₱{item.avgFare} avg fare</Text>
             </View>
           </View>
@@ -345,16 +343,16 @@ export default function BusListScreen({ navigation, route }) {
         <View style={styles.headerContainer}>
           <View style={styles.headerRow}>
             <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={24} color="#fff" />
+              <Ionicons name="arrow-back-outline" size={22} color="#fff" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Available Buses</Text>
+            <Text style={styles.headerTitle}>Available buses</Text>
             <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-              <Ionicons name="menu" size={24} color="#fff" />
+              <Ionicons name="menu-outline" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#f59e0b" />
+          <ActivityIndicator size="large" color={colors.brand} />
           <Text style={styles.loadingText}>Loading bus data...</Text>
         </View>
       </View>
@@ -367,16 +365,16 @@ export default function BusListScreen({ navigation, route }) {
         <View style={styles.headerContainer}>
           <View style={styles.headerRow}>
             <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={24} color="#fff" />
+              <Ionicons name="arrow-back-outline" size={22} color="#fff" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Available Buses</Text>
+            <Text style={styles.headerTitle}>Available buses</Text>
             <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-              <Ionicons name="menu" size={24} color="#fff" />
+              <Ionicons name="menu-outline" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="warning" size={48} color="#F44336" />
+          <Ionicons name="warning" size={48} color={colors.danger} />
           <Text style={styles.errorText}>Failed to load bus data</Text>
           <Text style={styles.errorSubtext}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={async () => {
@@ -399,13 +397,13 @@ export default function BusListScreen({ navigation, route }) {
       <View style={styles.headerContainer}>
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Available Buses</Text>
+            <Text style={styles.headerTitle}>Available buses</Text>
           </View>
           <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-            <Ionicons name="menu" size={24} color="#fff" />
+            <Ionicons name="menu-outline" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -413,30 +411,47 @@ export default function BusListScreen({ navigation, route }) {
       {/* Filters */}
       <View style={styles.filtersContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {renderFilterButton('all', 'All Buses')}
+          {renderFilterButton('all', 'All buses')}
           {renderFilterButton('active', 'Active')}
-          {renderFilterButton('pwd', 'PWD Accessible')}
+          {renderFilterButton('pwd', 'PWD accessible')}
           {renderFilterButton('nearby', 'Nearby')}
-          {renderFilterButton('low-capacity', 'Low Capacity')}
+          {renderFilterButton('low-capacity', 'Low capacity')}
         </ScrollView>
       </View>
 
-      {/* Bus List */}
+      {/* Divider below filters */}
+      <View style={styles.sectionDivider} />
+
+      {/* Bus List with pull-to-refresh even when empty */}
       <FlatList
         data={filteredBuses}
         renderItem={renderBusItem}
         keyExtractor={(item) => item.id}
         style={styles.busList}
-        contentContainerStyle={styles.busListContent}
+        contentContainerStyle={[
+          styles.busListContent,
+          filteredBuses.length === 0 && styles.busListEmptyContent,
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#f59e0b']}
-            tintColor="#f59e0b"
+            colors={[colors.brand]}
+            tintColor={colors.brand}
           />
         }
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyStateWrapper}>
+            <View style={styles.emptyStateCard}>
+              <Ionicons name="bus-outline" size={40} color={colors.textSecondary} />
+            </View>
+            <Text style={styles.emptyStateTitle}>No available buses</Text>
+            <Text style={styles.emptyStateSubtitle}>
+              There are currently no buses that match your filters. Pull down to refresh or adjust the filters.
+            </Text>
+          </View>
+        }
       />
     </View>
   );
@@ -445,18 +460,16 @@ export default function BusListScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   headerContainer: {
-    backgroundColor: '#f59e0b',
-    paddingTop: 60,
-    paddingBottom: 32,
-    paddingHorizontal: 20,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 12,
+    backgroundColor: colors.brand,
+    paddingTop: 52,
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    ...shadows.floating,
   },
   headerRow: {
     flexDirection: 'row',
@@ -469,66 +482,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     color: '#fff',
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     fontFamily: 'System',
     letterSpacing: -0.8,
   },
   menuButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   filtersContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 2,
-    borderBottomColor: '#f0f0f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
   },
   filterButton: {
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 24,
-    backgroundColor: '#fff',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
     marginRight: 12,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
   },
   filterButtonActive: {
-    backgroundColor: '#f59e0b',
-    borderColor: '#f59e0b',
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 10,
-    transform: [{ scale: 1.05 }],
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   filterButtonText: {
-    color: '#666',
+    color: colors.textSecondary,
     fontSize: 15,
     fontWeight: '700',
     fontFamily: 'System',
@@ -541,20 +536,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   busListContent: {
-    padding: 20,
+  padding: spacing.lg,
+  },
+  busListEmptyContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: colors.borderSubtle,
   },
   busCard: {
-    backgroundColor: '#fff',
-    borderRadius: 28,
-    padding: 24,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 30,
-    elevation: 12,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
   },
   busHeader: {
     flexDirection: 'row',
@@ -566,16 +566,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   busRoute: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
-    color: '#1a1a1a',
-    marginBottom: 6,
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
     fontFamily: 'System',
     letterSpacing: -0.5,
   },
   busDirection: {
     fontSize: 15,
-    color: '#666',
+    color: colors.textSecondary,
     fontFamily: 'System',
     fontWeight: '600',
     letterSpacing: -0.1,
@@ -583,17 +583,13 @@ const styles = StyleSheet.create({
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: colors.surfaceSubtle,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
   },
   statusDot: {
     width: 10,
@@ -604,21 +600,17 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#666',
+    color: colors.textSecondary,
     fontFamily: 'System',
     letterSpacing: -0.1,
   },
   capacityIndicator: {
-    marginLeft: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: '#f59e0b',
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    marginLeft: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brand,
+    ...shadows.card,
   },
   capacityIndicatorText: {
     fontSize: 12,
@@ -628,8 +620,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   busDetails: {
-    gap: 12,
-    marginBottom: 16,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   detailRow: {
     flexDirection: 'row',
@@ -639,46 +631,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: colors.surfaceSubtle,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
   },
   detailText: {
     fontSize: 15,
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     marginLeft: 8,
     fontFamily: 'System',
     fontWeight: '600',
     letterSpacing: -0.1,
   },
   pwdSection: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: colors.borderMuted,
   },
   pwdInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0fdf4',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#d1fae5',
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: colors.surfaceSubtle,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
   },
   pwdText: {
     fontSize: 15,
@@ -688,21 +672,21 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   capacitySection: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: colors.borderMuted,
   },
   capacityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
+    marginBottom: spacing.md,
+    backgroundColor: colors.surfaceSubtle,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
   },
   capacityLabel: {
     fontSize: 15,
@@ -712,77 +696,93 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   capacityBar: {
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
   capacityBarBackground: {
     height: 10,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 8,
+    backgroundColor: colors.borderMuted,
+    borderRadius: radius.md,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    ...shadows.card,
   },
   capacityBarFill: {
     height: '100%',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    borderRadius: radius.md,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     fontFamily: 'System',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#fff',
+    padding: spacing.xl,
+    backgroundColor: colors.surface,
   },
   errorText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#F44336',
+    color: colors.textPrimary,
     marginTop: 10,
     textAlign: 'center',
     fontFamily: 'System',
   },
   errorSubtext: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 5,
     textAlign: 'center',
     fontFamily: 'System',
   },
   retryButton: {
-    marginTop: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    backgroundColor: '#f59e0b',
-    borderRadius: 20,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
+    marginTop: spacing.xl,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxl,
+    backgroundColor: colors.brand,
+    borderRadius: radius.pill,
+    ...shadows.floating,
   },
   retryButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
     fontFamily: 'System',
+  },
+  emptyStateWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  emptyStateCard: {
+    width: 96,
+    height: 96,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceSubtle,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  emptyStateSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 }); 

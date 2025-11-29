@@ -157,17 +157,44 @@ export const SupabaseProvider = ({ children }) => {
                                      !isNaN(updatedBus.latitude) && 
                                      !isNaN(updatedBus.longitude);
         const hasActiveDriver = updatedBus.driver_id && 
-                                (updatedBus.status === 'active' || updatedBus.status === undefined);
+                                updatedBus.status === 'active';
         
-        // Check if bus has recent location update (within last 5 minutes)
+        // Check if bus has recent location update (within last 10 minutes)
         const hasRecentLocation = updatedBus.last_location_update && 
-          new Date(updatedBus.last_location_update) > new Date(Date.now() - 5 * 60 * 1000);
+          new Date(updatedBus.last_location_update) > new Date(Date.now() - 10 * 60 * 1000);
         
-        // If driver went off duty or coordinates are invalid, remove bus from list
-        if (!hasValidCoordinates || !hasActiveDriver || !hasRecentLocation) {
-          console.log('🚫 Driver went off duty or bus went offline, removing from list:', updatedBus.id);
+        // Check if driver just went on duty (bus was recently updated - within last 2 minutes)
+        // This allows buses to appear immediately when driver goes on duty, even without coordinates yet
+        const justWentOnDuty = updatedBus.updated_at && 
+          new Date(updatedBus.updated_at) > new Date(Date.now() - 2 * 60 * 1000);
+        
+        // Only remove bus if:
+        // 1. No active driver (driver went off duty)
+        // 2. Has valid coordinates but location is stale (been offline too long)
+        // This allows buses to appear immediately when driver goes on duty, even without coordinates
+        // Also allows buses that have been on duty but GPS hasn't started yet
+        if (!hasActiveDriver) {
+          console.log('🚫 Removing bus - no active driver:', updatedBus.id);
           setBuses(prevBuses => prevBuses.filter(b => b.id !== updatedBus.id));
           return;
+        }
+        
+        // If bus has coordinates but they're stale (no update in >10 min), remove it
+        // But if bus has no coordinates yet (GPS not started), keep it (will use placeholder)
+        if (hasValidCoordinates && !hasRecentLocation && !justWentOnDuty) {
+          console.log('🚫 Removing bus - stale location (has coords but >10 min old):', updatedBus.id);
+          setBuses(prevBuses => prevBuses.filter(b => b.id !== updatedBus.id));
+          return;
+        }
+        
+        // Allow bus to stay even without coordinates if it has active driver
+        // This handles cases where GPS hasn't started yet or is having issues
+        if (!hasValidCoordinates) {
+          if (justWentOnDuty) {
+            console.log('✅ Keeping bus (just went on duty, waiting for GPS):', updatedBus.id);
+          } else {
+            console.log('✅ Keeping bus (active driver, waiting for GPS coordinates):', updatedBus.id);
+          }
         }
         
         // Merge all relevant fields so visibility filters react correctly
@@ -193,19 +220,35 @@ export const SupabaseProvider = ({ children }) => {
           });
           
           // If bus doesn't exist and has valid data, add it
-          if (!exists && hasValidCoordinates && hasActiveDriver) {
-            return [...merged, updatedBus];
+          // Allow buses that just went on duty even without coordinates yet (will get coordinates soon)
+          if (!exists && hasActiveDriver && (hasValidCoordinates || justWentOnDuty)) {
+            console.log('✅ Adding new bus to context (just went on duty or has coordinates):', updatedBus.id);
+            // If bus just went on duty but has no coordinates, set placeholder coordinates
+            // Real coordinates will arrive via location update
+            const busToAdd = { ...updatedBus };
+            if (!hasValidCoordinates && justWentOnDuty) {
+              // Use a default placeholder location (coordinates will update when GPS arrives)
+              busToAdd.latitude = 14.4791; // Default placeholder
+              busToAdd.longitude = 120.8969;
+              console.log('📍 Setting placeholder coordinates for bus that just went on duty:', updatedBus.id);
+            }
+            return [...merged, busToAdd];
           }
           
-          // Filter out any buses with invalid coordinates (safety check)
-          return merged.filter(bus => 
-            bus.latitude != null && 
-            bus.longitude != null && 
-            !isNaN(bus.latitude) && 
-            !isNaN(bus.longitude) &&
-            bus.driver_id &&
-            (bus.status === 'active' || bus.status === undefined)
-          );
+          // Filter out any buses with invalid coordinates, BUT allow buses that just went on duty
+          // Even if they don't have coordinates yet (they'll get them soon)
+          return merged.filter(bus => {
+            const busJustWentOnDuty = bus.updated_at && 
+              new Date(bus.updated_at) > new Date(Date.now() - 2 * 60 * 1000);
+            const hasValidCoords = bus.latitude != null && 
+              bus.longitude != null && 
+              !isNaN(bus.latitude) && 
+              !isNaN(bus.longitude);
+            const hasActiveDriver = bus.driver_id && bus.status === 'active';
+            
+            // Keep bus if: has active driver AND (has valid coordinates OR just went on duty)
+            return hasActiveDriver && (hasValidCoords || busJustWentOnDuty);
+          });
         });
       } else if (payload.event === 'DELETE') {
         // Remove deleted buses from local state

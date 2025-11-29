@@ -353,6 +353,7 @@ $$ LANGUAGE plpgsql;
 DROP FUNCTION IF EXISTS update_bus_location_simple(UUID, DECIMAL, DECIMAL, DECIMAL, DECIMAL);
 
 -- Simplified function for real-time bus location updates with better response
+-- FIX: Validates coordinates before updating to prevent NULL coordinate issues
 CREATE FUNCTION update_bus_location_simple(
   p_bus_id UUID,
   p_latitude DECIMAL(10, 8),
@@ -363,6 +364,7 @@ CREATE FUNCTION update_bus_location_simple(
 RETURNS JSON AS $$
 DECLARE
   v_bus_exists BOOLEAN;
+  v_coordinates_valid BOOLEAN;
 BEGIN
   -- Check if bus exists
   SELECT EXISTS(SELECT 1 FROM buses WHERE id = p_bus_id) INTO v_bus_exists;
@@ -374,31 +376,52 @@ BEGIN
       'bus_id', p_bus_id
     );
   END IF;
-  
-  -- Update bus location
-  UPDATE buses SET
-    latitude = p_latitude,
-    longitude = p_longitude,
-    accuracy = p_accuracy,
-    speed = p_speed_kmh,
-    tracking_status = CASE 
-      WHEN p_speed_kmh > 0 THEN 'moving'
-      WHEN p_speed_kmh = 0 THEN 'stopped'
-      ELSE tracking_status
-    END,
-    last_location_update = NOW(),
-    updated_at = NOW()
-  WHERE id = p_bus_id;
-  
-  -- Return success response
-  RETURN json_build_object(
-    'success', true,
-    'message', 'Location updated successfully',
-    'bus_id', p_bus_id,
-    'latitude', p_latitude,
-    'longitude', p_longitude,
-    'timestamp', NOW()
+
+  -- Validate coordinates: both must be non-NULL and within valid ranges
+  v_coordinates_valid := (
+    p_latitude IS NOT NULL 
+    AND p_longitude IS NOT NULL
+    AND p_latitude BETWEEN -90 AND 90
+    AND p_longitude BETWEEN -180 AND 180
   );
+
+  -- Only update location fields if coordinates are valid
+  IF v_coordinates_valid THEN
+    -- Update bus location with all fields
+    -- NOTE: buses table doesn't have an 'accuracy' column, so we skip it
+    UPDATE buses SET
+      latitude = p_latitude,
+      longitude = p_longitude,
+      speed = p_speed_kmh,
+      tracking_status = CASE 
+        WHEN p_speed_kmh > 0 THEN 'moving'
+        WHEN p_speed_kmh = 0 THEN 'stopped'
+        ELSE tracking_status
+      END,
+      last_location_update = NOW(),  -- Only update timestamp when coordinates are valid
+      updated_at = NOW()
+    WHERE id = p_bus_id;
+    
+    -- Return success response
+    RETURN json_build_object(
+      'success', true,
+      'message', 'Location updated successfully',
+      'bus_id', p_bus_id,
+      'latitude', p_latitude,
+      'longitude', p_longitude,
+      'timestamp', NOW()
+    );
+  ELSE
+    -- Reject update when coordinates are invalid
+    RETURN json_build_object(
+      'success', false,
+      'message', 'Invalid coordinates: latitude and longitude must be valid numbers',
+      'bus_id', p_bus_id,
+      'latitude_received', p_latitude,
+      'longitude_received', p_longitude,
+      'error_code', 'INVALID_COORDINATES'
+    );
+  END IF;
 END;
 $$ LANGUAGE plpgsql;
 

@@ -44,16 +44,15 @@ export default function MapScreen({ navigation, route }) {
   // Ping modal state
   const [showPingModal, setShowPingModal] = useState(false);
   
-  // Debug selected bus ID
+  // Keep selected bus in sync when navigating with params
   useEffect(() => {
-    console.log('🎯 Selected bus ID from route:', route?.params?.selectedBusId);
-    console.log('🎯 Current selectedBusId state:', selectedBusId);
+    // debug only
+    // console.log('Selected bus from route params:', route?.params?.selectedBusId);
   }, [route?.params?.selectedBusId, selectedBusId]);
 
   // Update selectedBusId when route params change
   useEffect(() => {
     if (route?.params?.selectedBusId !== selectedBusId) {
-      console.log('🎯 Updating selectedBusId from route params:', route?.params?.selectedBusId);
       setSelectedBusId(route?.params?.selectedBusId || null);
     }
   }, [route?.params?.selectedBusId]);
@@ -71,7 +70,7 @@ export default function MapScreen({ navigation, route }) {
     getLocation();
     loadRoutes();
 
-    // Start high-accuracy continuous location updates
+    // Start continuous location updates (throttled to avoid freezing UI)
     let subscription;
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -79,20 +78,15 @@ export default function MapScreen({ navigation, route }) {
 
       subscription = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.Highest,
-          timeInterval: 1000, // Update every 1 second (was 2000)
-          distanceInterval: 1, // Update on 1 meter change (was 2)
+          // Balanced accuracy is enough for passenger view and lighter on the JS thread
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 5000, // Update every 5 seconds instead of every 1 second
+          distanceInterval: 10, // Update when user moves ~10 meters instead of 1 meter
           mayShowUserSettingsDialog: true,
         },
         (pos) => {
+          // Keep latest location in state; heavy map logic is handled inside RealtimeBusMap
           setLocation(pos);
-          const region = {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            latitudeDelta: 0.005,
-            longitudeDelta: 0.005,
-          };
-          // Location is now handled by RealtimeBusMap component
         }
       );
     })();
@@ -108,7 +102,6 @@ export default function MapScreen({ navigation, route }) {
     try {
       const routes = await getAllRoutes(supabaseHelpers);
       setAvailableRoutes(routes);
-      console.log('✅ Loaded routes for MapScreen:', routes.length);
     } catch (err) {
       console.error('Error loading routes:', err);
     }
@@ -124,22 +117,16 @@ export default function MapScreen({ navigation, route }) {
   // This is now handled by RealtimeBusMap component
   useEffect(() => {
     if (selectedBusId && mapBuses.length > 0) {
-      console.log('🎯 Selected bus ID:', selectedBusId);
-      console.log('🎯 Available map buses:', mapBuses.map(bus => ({ id: bus.id, route_number: bus.route_number })));
+      // debug only
+      // console.log('Selected bus ID:', selectedBusId);
     }
   }, [selectedBusId, mapBuses]);
 
   const loadBuses = async () => {
     try {
-      console.log('🚌 Loading buses:', buses.length, 'buses from database');
-      console.log('🚌 Bus data:', buses);
-      
       // Transform database buses to map format - only show buses with active drivers/trips
       const transformedBuses = buses.map(bus => {
         const route = routes.find(r => r.id === bus.route_id);
-        console.log('🚌 Processing bus:', bus.bus_number, 'Route:', route?.route_number);
-        console.log('🚌 Bus coordinates:', bus.latitude, bus.longitude);
-        console.log('🚌 Bus driver status:', bus.driver_id, 'status:', bus.status, 'tracking:', bus.tracking_status);
         
         // Show buses that have active drivers (relaxed criteria for testing)
         const hasActiveDriver = bus.driver_id && bus.status === 'active';
@@ -148,21 +135,15 @@ export default function MapScreen({ navigation, route }) {
         const hasValidCoordinates = bus.latitude && bus.longitude && 
           !isNaN(bus.latitude) && !isNaN(bus.longitude);
         
-        // Debug logging for each bus
-        console.log('🚌 Bus filter check:', {
-          bus_number: bus.bus_number,
-          driver_id: bus.driver_id,
-          status: bus.status,
-          hasActiveDriver,
-          hasRecentLocation,
-          hasValidCoordinates,
-          lastUpdate: bus.last_location_update,
-          coords: { lat: bus.latitude, lng: bus.longitude }
-        });
+        // Check if driver just went on duty (bus was recently updated - within last 5 minutes)
+        // This allows buses to appear immediately when driver goes on duty, even without coordinates yet
+        // Extended to 5 minutes to allow more time for GPS to acquire location
+        const justWentOnDuty = bus.updated_at && 
+          new Date(bus.updated_at) > new Date(Date.now() - 5 * 60 * 1000);
         
-        // Only require active driver and valid coordinates (relaxed from recent location requirement)
-        if (!hasActiveDriver || !hasValidCoordinates) {
-          console.log('🚌 Skipping bus - no active driver or invalid coords:', bus.bus_number, 'driver:', bus.driver_id, 'status:', bus.status, 'coords:', bus.latitude, bus.longitude);
+        // Show bus if driver is active AND (has valid coordinates OR just went on duty)
+        // This allows buses to appear immediately when driver goes on duty, even before first location update
+        if (!hasActiveDriver) {
           return null;
         }
         
@@ -170,26 +151,34 @@ export default function MapScreen({ navigation, route }) {
         let lat = bus.latitude;
         let lng = bus.longitude;
         
-        // Fallback: if no coords, use sample coordinates or user location
-        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
-          console.log('🚌 No valid coordinates for bus, using fallback location');
+        // If driver just went on duty but coordinates aren't available yet, use placeholder
+        // Real coordinates will be updated once GPS location arrives via real-time subscription
+        if ((!lat || !lng || isNaN(lat) || isNaN(lng)) && justWentOnDuty) {
+          // Use placeholder coordinates (will update when GPS location arrives)
           if (location?.coords) {
-            const baseLat = location.coords.latitude;
-            const baseLng = location.coords.longitude;
-            const jitter = (Math.random() - 0.5) * 0.002; // ~200m max
-            lat = baseLat + jitter;
-            lng = baseLng + jitter;
+            lat = location.coords.latitude;
+            lng = location.coords.longitude;
           } else {
-            // Use sample coordinates from the database if no user location
-            const sampleCoords = [
-              { lat: 14.3294, lng: 120.9366 }, // Dasmarinas Terminal
-              { lat: 14.4591, lng: 120.9468 }, // Bacoor
-              { lat: 14.5995, lng: 120.9842 }  // Manila City Hall
-            ];
-            const randomCoord = sampleCoords[Math.floor(Math.random() * sampleCoords.length)];
-            lat = randomCoord.lat;
-            lng = randomCoord.lng;
-            console.log('🚌 Using sample coordinates:', lat, lng);
+            // Fallback to a default location if user location not available
+            lat = 14.4791; // Default to a central location
+            lng = 120.8969;
+          }
+        } else if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+          // IMPORTANT FIX: For buses with active drivers but no coordinates yet,
+          // still show them with placeholder coordinates rather than hiding them
+          // This ensures buses appear even if GPS is slow to acquire location
+          if (hasActiveDriver) {
+            // Use placeholder coordinates so bus appears on map
+            if (location?.coords) {
+              lat = location.coords.latitude;
+              lng = location.coords.longitude;
+            } else {
+              lat = 14.4791;
+              lng = 120.8969;
+            }
+          } else {
+            // Only hide buses that don't have active drivers
+            return null;
           }
         }
         
@@ -205,17 +194,12 @@ export default function MapScreen({ navigation, route }) {
           max_capacity: bus.max_capacity || 50,
           last_location_update: bus.updated_at || new Date().toISOString(),
         };
-        
-        console.log('🚌 Transformed bus:', transformedBus);
         return transformedBus;
       }).filter(b => {
         if (!b) return false; // Filter out null buses (inactive drivers)
         const isValid = typeof b.latitude === 'number' && typeof b.longitude === 'number';
-        console.log('🚌 Bus filter check:', b.route_number, 'Valid:', isValid, 'Coords:', b.latitude, b.longitude);
         return isValid;
       });
-      
-      console.log('🚌 Final map buses:', transformedBuses.length, 'buses');
       setMapBuses(transformedBuses);
     } catch (error) {
       console.error('Error loading buses:', error);
@@ -321,37 +305,32 @@ export default function MapScreen({ navigation, route }) {
 
   const clearSelection = () => {
     setSelectedBusId(null);
-    console.log('🎯 Cleared bus selection');
   };
 
   const handleBusPress = (bus) => {
-    console.log('🚌 Bus pressed:', bus);
     setTrackingBus(bus);
     setShowTrackModal(true);
   };
 
   const handleBusSelect = (bus) => {
-    console.log('🚌 Bus selected for map focus:', bus);
-    console.log('🚌 Bus ID for selection:', bus.id);
-    setSelectedBusId(bus.id);
+    const busId = bus?.id || bus?.bus_id;
+    if (busId) {
+      setSelectedBusId(busId);
+    }
   };
 
   const handleBusesLoaded = (loadedBuses) => {
-    console.log('🚌 MapScreen - Buses loaded from RealtimeBusMap:', loadedBuses.length);
     setMapBuses(loadedBuses);
   };
 
   const handleRouteSelect = async (routeId) => {
-    console.log('🗺️ Route selected:', routeId);
     setSelectedRouteId(routeId);
     setShowRouteSelector(false);
     
     // Load the selected route details
     try {
       const route = await getRouteById(routeId, supabaseHelpers);
-      if (route) {
-        console.log('✅ Selected route details:', route.name);
-      }
+      // route details are stored in state; no extra logging needed
     } catch (err) {
       console.error('Error loading selected route:', err);
     }
@@ -503,7 +482,11 @@ export default function MapScreen({ navigation, route }) {
           <Text style={styles.infoText}>
             {mapBuses.length} buses • Last update: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
           </Text>
-          <TouchableOpacity style={styles.refreshButton} onPress={refreshData}>
+          <TouchableOpacity style={styles.refreshButton} onPress={async () => {
+            await refreshData();
+            // Force reload by navigating away and back (if needed)
+            // The RealtimeBusMap component should automatically reload when contextBuses changes
+          }}>
             <Text style={styles.refreshButtonText}>Refresh</Text>
           </TouchableOpacity>
         </View>
@@ -528,7 +511,9 @@ export default function MapScreen({ navigation, route }) {
             <View style={styles.selectedBusInfo}>
               <Ionicons name="radio-button-on" size={18} color="#f59e0b" />
               <Text style={styles.selectedBusText}>
-                Bus {mapBuses.find(bus => bus.id === selectedBusId)?.route_number || 'Unknown'} Selected
+                Bus {mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_number 
+                  || mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_name 
+                  || 'Unknown'} Selected
               </Text>
             </View>
             <View style={styles.busActionButtons}>
@@ -673,7 +658,7 @@ export default function MapScreen({ navigation, route }) {
         visible={showSetAlarmModal}
         onClose={() => setShowSetAlarmModal(false)}
         userType="passenger"
-        selectedBus={mapBuses.find(bus => bus.id === selectedBusId) || null}
+        selectedBus={mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId) || null}
       />
 
       {/* Ping Modal */}
@@ -682,8 +667,10 @@ export default function MapScreen({ navigation, route }) {
           visible={showPingModal}
           onClose={() => setShowPingModal(false)}
           busId={selectedBusId}
-          busNumber={mapBuses.find(bus => bus.id === selectedBusId)?.route_number}
-          routeNumber={mapBuses.find(bus => bus.id === selectedBusId)?.route_number}
+          busNumber={mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_number 
+            || mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.bus_name}
+          routeNumber={mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_number 
+            || mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_name}
         />
       )}
     </View>

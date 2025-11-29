@@ -33,14 +33,25 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
 
   useEffect(() => {
     if (visible) {
-      loadPingStatus();
+      // Set default status immediately so button is enabled
+      setPingStatus({
+        can_ping: true,
+        is_blocked: false,
+        cooldown_remaining: 0,
+        pings_remaining: 50,
+      });
+      
+      // Load status and location asynchronously (non-blocking)
+      loadPingStatus().catch(err => console.warn('Ping status load failed:', err));
+      
       if (useLocation) {
-        getCurrentLocation();
+        getCurrentLocation().catch(err => console.warn('Location get failed:', err));
       }
     } else {
       setMessage('');
       setSelectedType('ride_request');
       setCooldownTimer(0);
+      setPingStatus(null);
     }
   }, [visible]);
 
@@ -64,7 +75,22 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
 
   const loadPingStatus = async () => {
     try {
-      const status = await getUserPingStatus();
+      // Set default status immediately (enables button while loading)
+      setPingStatus({
+        can_ping: true,
+        is_blocked: false,
+        cooldown_remaining: 0,
+        pings_remaining: 50,
+      });
+      
+      // Load actual status (non-blocking)
+      const status = await Promise.race([
+        getUserPingStatus(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 5000) // 5 second timeout
+        )
+      ]);
+      
       setPingStatus(status);
       
       if (status.cooldown_remaining > 0) {
@@ -72,20 +98,41 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
       }
     } catch (error) {
       console.error('Error loading ping status:', error);
+      // On error, allow ping anyway (fail gracefully)
+      setPingStatus({
+        can_ping: true,
+        is_blocked: false,
+        cooldown_remaining: 0,
+        pings_remaining: 50,
+      });
     }
   };
 
   const getCurrentLocation = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      // Request permission with timeout
+      const { status } = await Promise.race([
+        Location.requestForegroundPermissionsAsync(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Permission timeout')), 3000)
+        )
+      ]);
+      
       if (status !== 'granted') {
         setUseLocation(false);
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      // Get location with timeout
+      const location = await Promise.race([
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          timeout: 5000, // 5 second timeout
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Location timeout')), 5000)
+        )
+      ]);
       
       setLocation({
         latitude: location.coords.latitude,
@@ -94,10 +141,16 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
     } catch (error) {
       console.error('Error getting location:', error);
       setUseLocation(false);
+      // Don't block UI - just disable location feature
     }
   };
 
   const handleSendPing = async () => {
+    // Prevent double taps while a ping is already in progress
+    if (isLoading) {
+      return;
+    }
+
     if (!busId) {
       Alert.alert('Error', 'No bus selected');
       return;
@@ -128,12 +181,18 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
 
     setIsLoading(true);
     try {
-      const result = await pingBus(
-        busId,
-        selectedType,
-        message.trim(),
-        useLocation && location ? location : null
-      );
+      // Add a hard timeout so the button never spins forever
+      const result = await Promise.race([
+        pingBus(
+          busId,
+          selectedType,
+          message.trim(),
+          useLocation && location ? location : null
+        ),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 10000)
+        ),
+      ]);
 
       if (result.success) {
         Alert.alert(
@@ -163,7 +222,7 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
       }
     } catch (error) {
       console.error('Error sending ping:', error);
-      Alert.alert('Error', error.message || 'Failed to send ping');
+      Alert.alert('Error', error.message || 'Failed to send ping. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -304,10 +363,10 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
               style={[
                 styles.button,
                 styles.sendButton,
-                (!pingStatus?.can_ping || isLoading) && styles.sendButtonDisabled,
+                (isLoading || cooldownTimer > 0 || (pingStatus && pingStatus.is_blocked)) && styles.sendButtonDisabled,
               ]}
               onPress={handleSendPing}
-              disabled={!pingStatus?.can_ping || isLoading || cooldownTimer > 0}
+              disabled={isLoading || cooldownTimer > 0 || (pingStatus && pingStatus.is_blocked)}
             >
               {isLoading ? (
                 <ActivityIndicator color="#FFF" />

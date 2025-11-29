@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSupabase } from '../contexts/SupabaseContext';
+import { colors, spacing, radius, shadows } from '../styles/uiTheme';
 
 const { width } = Dimensions.get('window');
 
@@ -66,13 +67,13 @@ export default function DriverScheduleScreen({ navigation }) {
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
-        return '#4CAF50';
+        return colors.success;
       case 'active':
-        return '#2196F3';
+        return colors.info;
       case 'scheduled':
-        return '#FF9800';
+        return colors.brand;
       default:
-        return '#9E9E9E';
+        return colors.textMuted;
     }
   };
 
@@ -138,7 +139,7 @@ export default function DriverScheduleScreen({ navigation }) {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#f59e0b" />
+          <ActivityIndicator size="large" color={colors.brand} />
           <Text style={styles.loadingText}>Loading schedule data...</Text>
         </View>
       </View>
@@ -149,7 +150,7 @@ export default function DriverScheduleScreen({ navigation }) {
     return (
       <View style={styles.container}>
         <View style={styles.errorContainer}>
-          <Ionicons name="warning" size={48} color="#F44336" />
+          <Ionicons name="warning" size={48} color={colors.danger} />
           <Text style={styles.errorText}>Failed to load schedule data</Text>
           <Text style={styles.errorSubtext}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={async () => {
@@ -188,11 +189,15 @@ export default function DriverScheduleScreen({ navigation }) {
       <View style={styles.shiftDetails}>
         <View style={styles.detailRow}>
           <View style={styles.detailItem}>
-            <Ionicons name="people" size={16} color="#666" />
+            <View style={styles.detailIconContainer}>
+              <Ionicons name="people" size={16} color={colors.info} />
+            </View>
             <Text style={styles.detailText}>{shift.passengers} passengers</Text>
           </View>
           <View style={styles.detailItem}>
-            <Ionicons name="speedometer" size={16} color="#666" />
+            <View style={styles.detailIconContainer}>
+              <Ionicons name="speedometer" size={16} color={colors.brand} />
+            </View>
             <Text style={styles.detailText}>{shift.distance}</Text>
           </View>
         </View>
@@ -273,7 +278,9 @@ export default function DriverScheduleScreen({ navigation }) {
             </View>
           ) : (
             <View style={styles.noShiftsCard}>
-              <Ionicons name="calendar-outline" size={48} color="#ccc" />
+              <View style={styles.noShiftsIconContainer}>
+                <Ionicons name="calendar-outline" size={48} color={colors.textMuted} />
+              </View>
               <Text style={styles.noShiftsText}>No shifts scheduled</Text>
               <Text style={styles.noShiftsSubtext}>Enjoy your day off!</Text>
             </View>
@@ -285,17 +292,23 @@ export default function DriverScheduleScreen({ navigation }) {
           <Text style={styles.sectionTitle}>Weekly Summary</Text>
           <View style={styles.summaryCards}>
             <View style={styles.summaryCard}>
-              <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+              <View style={[styles.summaryIconContainer, { backgroundColor: '#ECFDF5' }]}>
+                <Ionicons name="checkmark-circle" size={24} color={colors.success} />
+              </View>
               <Text style={styles.summaryValue}>3</Text>
               <Text style={styles.summaryLabel}>Completed</Text>
             </View>
             <View style={styles.summaryCard}>
-              <Ionicons name="play-circle" size={24} color="#2196F3" />
+              <View style={[styles.summaryIconContainer, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="play-circle" size={24} color={colors.info} />
+              </View>
               <Text style={styles.summaryValue}>1</Text>
               <Text style={styles.summaryLabel}>Active</Text>
             </View>
             <View style={styles.summaryCard}>
-              <Ionicons name="time" size={24} color="#FF9800" />
+              <View style={[styles.summaryIconContainer, { backgroundColor: colors.brandSoft }]}>
+                <Ionicons name="time" size={24} color={colors.brand} />
+              </View>
               <Text style={styles.summaryValue}>3</Text>
               <Text style={styles.summaryLabel}>Scheduled</Text>
             </View>
@@ -309,18 +322,16 @@ export default function DriverScheduleScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   headerContainer: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: colors.brand,
     paddingTop: 60,
-    paddingBottom: 32,
-    paddingHorizontal: 24,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 12,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    ...shadows.floating,
   },
   headerRow: {
     flexDirection: 'row',
@@ -330,125 +341,126 @@ const styles = StyleSheet.create({
   menuButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
+    paddingHorizontal: spacing.md,
   },
   headerTitle: {
     color: '#fff',
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 4,
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
     fontFamily: 'System',
-    letterSpacing: -0.8,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 16,
-    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontSize: 15,
+    fontWeight: '500',
     fontFamily: 'System',
   },
   profileButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
   },
   weekOverview: {
-    marginTop: 20,
-    marginBottom: 25,
+    marginTop: spacing.xl,
+    marginBottom: spacing.xxl,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: '800',
-    color: '#1a1a1a',
-    marginBottom: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.lg,
     fontFamily: 'System',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   daysContainer: {
     flexDirection: 'row',
-    gap: 10,
+    gap: spacing.md,
+    paddingRight: spacing.xl,
   },
   dayCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     alignItems: 'center',
-    minWidth: 80,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
+    minWidth: 88,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
   },
   selectedDayCard: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+    ...shadows.floating,
   },
   dayName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#666',
-    marginBottom: 4,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
     fontFamily: 'System',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   selectedDayName: {
     color: '#fff',
   },
   dayDate: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 4,
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
     fontFamily: 'System',
+    letterSpacing: -0.5,
   },
   selectedDayDate: {
     color: '#fff',
   },
   shiftCount: {
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    marginTop: spacing.xs,
   },
   shiftCountText: {
-    fontSize: 10,
-    color: '#666',
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '600',
     fontFamily: 'System',
   },
   selectedShiftCountText: {
     color: '#fff',
   },
   shiftsSection: {
-    marginBottom: 25,
+    marginBottom: spacing.xxl,
   },
   shiftsList: {
-    gap: 12,
+    gap: spacing.md,
   },
   shiftCard: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 8,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadows.floating,
   },
   cardPressed: {
     transform: [{ scale: 0.98 }],
@@ -457,164 +469,199 @@ const styles = StyleSheet.create({
   shiftHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
   },
   shiftInfo: {
     flex: 1,
+    marginRight: spacing.md,
   },
   shiftRoute: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 2,
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
     fontFamily: 'System',
+    letterSpacing: -0.3,
   },
   shiftTime: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
+    fontWeight: '500',
     fontFamily: 'System',
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    alignSelf: 'flex-start',
   },
   statusBadgeText: {
     fontSize: 12,
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: '700',
     fontFamily: 'System',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   shiftDetails: {
-    gap: 8,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderMuted,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: spacing.md,
   },
   detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    backgroundColor: colors.surfaceSubtle,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+  },
+  detailIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
   },
   detailText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 6,
+    fontSize: 13,
+    color: colors.textPrimary,
+    fontWeight: '600',
     fontFamily: 'System',
   },
   noShiftsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 32,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.xxxl,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 8,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
+  },
+  noShiftsIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.surfaceSubtle,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   noShiftsText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 12,
-    marginBottom: 4,
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
     fontFamily: 'System',
   },
   noShiftsSubtext: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textSecondary,
     fontFamily: 'System',
+    textAlign: 'center',
   },
   summarySection: {
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   summaryCards: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: spacing.md,
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     alignItems: 'center',
-    marginHorizontal: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
+  },
+  summaryIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   summaryValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000',
-    marginTop: 8,
-    marginBottom: 4,
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
     fontFamily: 'System',
+    letterSpacing: -0.5,
   },
   summaryLabel: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
+    fontWeight: '600',
     fontFamily: 'System',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: spacing.md,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
+    fontWeight: '500',
     fontFamily: 'System',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 20,
+    backgroundColor: colors.background,
+    padding: spacing.xxxl,
   },
   errorText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#F44336',
-    marginTop: 10,
-    marginBottom: 5,
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.danger,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
     fontFamily: 'System',
+    letterSpacing: -0.3,
   },
   errorSubtext: {
-    fontSize: 14,
-    color: '#999',
+    fontSize: 15,
+    color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.xl,
+    fontWeight: '500',
     fontFamily: 'System',
   },
   retryButton: {
-    backgroundColor: '#f59e0b',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 20,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
+    backgroundColor: colors.brand,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxl,
+    borderRadius: radius.lg,
+    ...shadows.floating,
   },
   retryButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
     fontFamily: 'System',
   },
 }); 

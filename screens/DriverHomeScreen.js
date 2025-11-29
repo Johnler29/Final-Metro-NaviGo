@@ -12,7 +12,9 @@ import {
   Modal,
   SafeAreaView,
   FlatList,
+  Platform,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
@@ -22,6 +24,12 @@ import CapacityStatusModal from '../components/CapacityStatusModal';
 import AlarmModal from '../components/AlarmModal';
 import { supabase } from '../lib/supabase';
 import { Vibration } from 'react-native';
+import {
+  enableDriverBackgroundTracking,
+  stopDriverBackgroundTracking,
+  setDriverBackgroundDutyStatus,
+} from '../background/driverBackgroundTasks';
+import { colors, spacing, radius, shadows } from '../styles/uiTheme';
 
 const { width } = Dimensions.get('window');
 
@@ -146,6 +154,36 @@ export default function DriverHomeScreen({ navigation }) {
     }
   }, [drivers, buses, driverBusAssignments, routes]);
 
+  useEffect(() => {
+    const hydrateDutyStateFromSession = async () => {
+      try {
+        const driverSessionRaw = await AsyncStorage.getItem('driverSession');
+        if (!driverSessionRaw) {
+          return;
+        }
+
+        if (!isOnDuty) {
+          setIsOnDuty(true);
+        }
+
+        if (!currentTrip) {
+          const storedTrip = await AsyncStorage.getItem('currentTrip');
+          if (storedTrip) {
+            setCurrentTrip(JSON.parse(storedTrip));
+          }
+        }
+
+        if (currentBus?.id) {
+          await setDriverBackgroundDutyStatus('on_trip');
+        }
+      } catch (hydrateError) {
+        console.warn('⚠️ Failed to hydrate driver duty state:', hydrateError?.message || hydrateError);
+      }
+    };
+
+    hydrateDutyStateFromSession();
+  }, [currentBus?.id]);
+
   // Location watcher ref and helpers
   const locationWatchRef = useRef(null);
 
@@ -232,6 +270,64 @@ export default function DriverHomeScreen({ navigation }) {
       stopLocationUpdates();
     }
     return () => { stopLocationUpdates(); };
+  }, [isOnDuty, currentBus?.id]);
+
+  // Mirror duty state into the resilient background task so Android runs a
+  // foreground service with the persistent notification even if the app moves
+  // to the background or the screen turns off.
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncBackgroundTask = async () => {
+      try {
+        if (isOnDuty && currentBus?.id) {
+          console.log('🚚 Ensuring background tracking stays active for bus:', currentBus?.id);
+          const result = await enableDriverBackgroundTracking({ 
+            busId: currentBus.id, 
+            dutyStatus: 'on_trip' 
+          });
+          
+          if (!cancelled) {
+            if (result?.success) {
+              console.log('✅ Background tracking enabled successfully');
+              await setDriverBackgroundDutyStatus('on_trip');
+            } else {
+              const errorMsg = result?.error || 'Unknown error';
+              console.error('❌ Failed to enable background tracking:', errorMsg);
+              // Show alert to user so they know tracking might not work in background
+              Alert.alert(
+                'Background Tracking Issue',
+                `Location tracking may not work when the app is minimized: ${errorMsg}. Please check app permissions in Settings.`,
+                [{ text: 'OK' }]
+              );
+            }
+          }
+        } else {
+          console.log('🛑 Ensuring background tracking stops while off duty or missing bus assignment.');
+          await setDriverBackgroundDutyStatus('off_duty');
+          await stopDriverBackgroundTracking();
+        }
+      } catch (bgSyncError) {
+        console.error('❌ Failed to sync driver background tracking state:', bgSyncError?.message || bgSyncError);
+        if (!cancelled) {
+          Alert.alert(
+            'Background Tracking Error',
+            'Failed to start background location tracking. Location updates may stop when the app is minimized.',
+            [{ text: 'OK' }]
+          );
+        }
+      }
+    };
+
+    // Small delay to ensure state is stable
+    const timeoutId = setTimeout(() => {
+      syncBackgroundTask();
+    }, 100);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [isOnDuty, currentBus?.id]);
 
   // Load and subscribe to ping notifications
@@ -514,6 +610,16 @@ export default function DriverHomeScreen({ navigation }) {
             
             // Store trip data in AsyncStorage for other screens to access
             await AsyncStorage.setItem('currentTrip', JSON.stringify(tripData));
+
+            // Start resilient background location tracking so that bus position
+            // continues to update even if the driver locks the phone or the app
+            // goes to the background. Foreground tracking still runs as before.
+            try {
+              await enableDriverBackgroundTracking({ busId: currentBus.id, dutyStatus: 'on_trip' });
+              await setDriverBackgroundDutyStatus('on_trip');
+            } catch (bgError) {
+              console.warn('⚠️ Failed to start driver background tracking:', bgError?.message || bgError);
+            }
             
             Alert.alert('Trip Started', 'Your trip has been started successfully.');
           } catch (error) {
@@ -550,6 +656,14 @@ export default function DriverHomeScreen({ navigation }) {
             setCurrentTrip(null);
             setPassengerCount(0);
             setTripStartTime(null);
+
+            // Ensure background tracking is fully stopped when the trip ends
+            try {
+              await setDriverBackgroundDutyStatus('off_duty');
+              await stopDriverBackgroundTracking();
+            } catch (bgError) {
+              console.warn('⚠️ Failed to stop driver background tracking on trip end:', bgError?.message || bgError);
+            }
             
             Alert.alert('Trip Ended', 'Your trip has been ended successfully.');
           } catch (error) {
@@ -654,6 +768,13 @@ export default function DriverHomeScreen({ navigation }) {
               // Stop location updates (non-fatal if this fails)
               try { await stopLocationUpdates(); } catch (e) { console.warn('stopLocationUpdates failed:', e?.message || e); }
 
+              // Also stop background tracking so we don't keep sending updates
+              // after the driver has explicitly gone off duty.
+              try {
+                await setDriverBackgroundDutyStatus('off_duty');
+                await stopDriverBackgroundTracking();
+              } catch (e) { console.warn('stopDriverBackgroundTracking failed:', e?.message || e); }
+
               // Clear current location from bus (accept and continue on error)
               if (currentBus?.id) {
                 try {
@@ -723,7 +844,7 @@ export default function DriverHomeScreen({ navigation }) {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#f59e0b" />
+          <ActivityIndicator size="large" color={colors.brand} />
           <Text style={styles.loadingText}>Loading driver data...</Text>
         </View>
       </View>
@@ -755,122 +876,98 @@ export default function DriverHomeScreen({ navigation }) {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.headerContainer}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-            <Ionicons name="menu" size={24} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Driver Dashboard</Text>
-            <Text style={styles.headerSubtitle}>Metro NaviGo Driver</Text>
-          </View>
-          <View style={styles.headerRightButtons}>
-            <TouchableOpacity 
-              style={styles.pingButton} 
-              onPress={() => setShowPingModal(true)}
-            >
-              <Ionicons name="notifications" size={24} color="#fff" />
-              {unreadPingCount > 0 && (
-                <View style={styles.pingBadge}>
-                  <Text style={styles.pingBadgeText}>{unreadPingCount}</Text>
+        <View style={styles.headerInner}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
+              <Ionicons name="menu" size={22} color="#fff" />
+            </TouchableOpacity>
+
+            <View style={[
+              styles.headerStatusPill,
+              isOnDuty ? styles.headerStatusPillOn : styles.headerStatusPillOff
+            ]}>
+              <View style={[
+                styles.headerStatusIconContainer,
+                isOnDuty ? styles.headerStatusIconContainerOn : styles.headerStatusIconContainerOff
+              ]}>
+                <Ionicons
+                  name={isOnDuty ? 'checkmark-circle' : 'alert-circle'}
+                  size={18}
+                  color={isOnDuty ? '#10B981' : '#EF4444'}
+                />
+              </View>
+              <View style={styles.headerStatusContent}>
+                <View style={styles.headerStatusRow}>
+                  <Text style={[
+                    styles.headerStatusTitle,
+                    isOnDuty ? styles.headerStatusTitleOn : styles.headerStatusTitleOff
+                  ]}>
+                    {isOnDuty ? 'On Duty' : 'Off Duty'}
+                  </Text>
+                  <View style={[
+                    styles.headerStatusDot,
+                    isOnDuty ? styles.headerStatusDotOn : styles.headerStatusDotOff,
+                  ]} />
                 </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.profileButton} onPress={handleProfilePress}>
-              <Ionicons name="person-circle" size={32} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        </View>
-        
-        <View style={styles.dutyStatus}>
-          <View style={styles.statusRow}>
-            <View style={styles.statusInfo}>
-              <Text style={styles.statusLabel}>Status</Text>
-              <Text style={[styles.statusText, { color: isOnDuty ? '#10B981' : '#EF4444' }]}>
-                {isOnDuty ? 'On Duty' : 'Off Duty'}
-              </Text>
+                <Text style={styles.headerStatusSubtitle} numberOfLines={1}>
+                  {currentBus
+                    ? `Bus ${currentBus.bus_number || currentBus.name || ''}`.trim()
+                    : 'No bus assigned'}
+                </Text>
+              </View>
             </View>
-            <View style={styles.buttonRow}>
-              {isOnDuty && (
-                <TouchableOpacity style={styles.offDutyButton} onPress={handleOffDuty}>
-                  <Ionicons name="stop-circle" size={20} color="#EF4444" />
-                  <Text style={styles.offDutyText}>Off Duty</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity style={styles.switchButton} onPress={handleRoleSwitch}>
-                <Ionicons name="swap-horizontal" size={20} color="#f59e0b" />
-                <Text style={styles.switchText}>Switch Mode</Text>
+
+            <View style={styles.headerRightButtons}>
+              <TouchableOpacity 
+                style={styles.headerIconButton} 
+                onPress={() => setShowPingModal(true)}
+              >
+                <Ionicons name="notifications-outline" size={20} color="#fff" />
+                {unreadPingCount > 0 && (
+                  <View style={styles.pingBadge}>
+                    <Text style={styles.pingBadgeText}>{unreadPingCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.headerIconButton} onPress={handleProfilePress}>
+                <Ionicons name="person-circle-outline" size={22} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </View>
 
+      <View style={styles.statusCardWrapper}>
+        <StatusCard
+          isOnDuty={isOnDuty}
+          onOffDutyPress={handleOffDuty}
+          onSwitchModePress={handleRoleSwitch}
+        />
+      </View>
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Current Trip - Prominent Card */}
         {currentTrip && (
-          <View style={styles.currentTripCard}>
-            <View style={styles.tripHeader}>
-              <View style={styles.tripIconContainer}>
-                <Ionicons name="bus" size={24} color="#f59e0b" />
-              </View>
-              <View style={styles.tripHeaderText}>
-                <Text style={styles.currentTripTitle}>Active Trip</Text>
-                <Text style={styles.tripRoute}>{currentTrip.route}</Text>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: '#10B981' }]}>
-                <Text style={styles.statusBadgeText}>ON TRIP</Text>
-              </View>
-            </View>
-            
-            <View style={styles.tripStats}>
-              <View style={styles.tripStatItem}>
-                <Ionicons name="people" size={20} color="#6B7280" />
-                <Text style={styles.tripStatLabel}>Passengers</Text>
-                <Text style={styles.tripStatValue}>{passengerCount}</Text>
-              </View>
-              <View style={styles.tripStatItem}>
-                <Ionicons name="time" size={20} color="#6B7280" />
-                <Text style={styles.tripStatLabel}>Duration</Text>
-                <Text style={styles.tripStatValue}>
-                  {tripStartTime ? Math.floor((new Date() - tripStartTime) / 60000) : 0}m
-                </Text>
-              </View>
-              <View style={styles.tripStatItem}>
-                <Ionicons name="speedometer" size={20} color="#6B7280" />
-                <Text style={styles.tripStatLabel}>Capacity</Text>
-                <Text style={styles.tripStatValue}>{currentCapacity}%</Text>
-              </View>
-            </View>
-          </View>
+          <ActiveTripCard
+            route={currentTrip.route}
+            passengerCount={passengerCount}
+            tripStartTime={tripStartTime}
+            currentCapacity={currentCapacity}
+          />
         )}
 
         {/* Stats Overview - Horizontal Cards */}
         <View style={styles.statsOverview}>
           <Text style={styles.sectionTitle}>Today's Overview</Text>
-          <View style={styles.statsRow}>
-            {driverStats.slice(0, 2).map((stat, index) => (
-              <View key={index} style={styles.statCardHorizontal}>
-                <View style={[styles.statIconSmall, { backgroundColor: stat.color + '15' }]}>
-                  <MaterialCommunityIcons name={stat.icon} size={20} color={stat.color} />
-                </View>
-                <View style={styles.statContent}>
-                  <Text style={styles.statValueSmall}>{stat.value}</Text>
-                  <Text style={styles.statTitleSmall}>{stat.title}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-          <View style={styles.statsRow}>
-            {driverStats.slice(2, 4).map((stat, index) => (
-              <View key={index + 2} style={styles.statCardHorizontal}>
-                <View style={[styles.statIconSmall, { backgroundColor: stat.color + '15' }]}>
-                  <MaterialCommunityIcons name={stat.icon} size={20} color={stat.color} />
-                </View>
-                <View style={styles.statContent}>
-                  <Text style={styles.statValueSmall}>{stat.value}</Text>
-                  <Text style={styles.statTitleSmall}>{stat.title}</Text>
-                </View>
-              </View>
+          <View style={styles.overviewGrid}>
+            {driverStats.map((stat, index) => (
+              <OverviewCard
+                key={stat.title + index}
+                icon={stat.icon}
+                color={stat.color}
+                value={stat.value}
+                title={stat.title}
+              />
             ))}
           </View>
         </View>
@@ -904,9 +1001,9 @@ export default function DriverHomeScreen({ navigation }) {
             <View style={styles.tripsListCompact}>
               {recentTrips.map((trip) => (
                 <View key={trip.id} style={styles.tripCardCompact}>
-                  <View style={styles.tripCardLeft}>
+                    <View style={styles.tripCardLeft}>
                     <View style={styles.tripIconSmall}>
-                      <Ionicons name="bus" size={16} color="#f59e0b" />
+                      <Ionicons name="bus" size={16} color={colors.brand} />
                     </View>
                     <View style={styles.tripInfoCompact}>
                       <Text style={styles.tripRouteCompact}>{trip.route}</Text>
@@ -980,7 +1077,7 @@ export default function DriverHomeScreen({ navigation }) {
                   }
                 }}
               >
-                <Ionicons name="refresh" size={20} color="#f59e0b" />
+                <Ionicons name="refresh" size={20} color={colors.brand} />
                 <Text style={styles.actionButtonText}>Reset Count</Text>
               </TouchableOpacity>
               
@@ -1053,7 +1150,7 @@ export default function DriverHomeScreen({ navigation }) {
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Passenger Pings</Text>
             <TouchableOpacity onPress={loadPingNotifications}>
-              <Ionicons name="refresh" size={24} color="#f59e0b" />
+              <Ionicons name="refresh" size={24} color={colors.brand} />
             </TouchableOpacity>
           </View>
           
@@ -1077,7 +1174,7 @@ export default function DriverHomeScreen({ navigation }) {
                 <View style={styles.pingCard}>
                   <View style={styles.pingHeader}>
                     <View style={styles.pingUserInfo}>
-                      <Ionicons name="person-circle" size={40} color="#f59e0b" />
+                      <Ionicons name="person-circle" size={40} color={colors.brand} />
                       <View style={{ marginLeft: 12 }}>
                         <Text style={styles.pingUserName}>
                           {ping.user_name || 'Passenger'}
@@ -1146,11 +1243,11 @@ export default function DriverHomeScreen({ navigation }) {
                         )}
                         activeOpacity={0.7}
                       >
-                        <Ionicons name="location" size={16} color="#f59e0b" />
+                        <Ionicons name="location" size={16} color={colors.brand} />
                         <Text style={styles.pingLocationText}>
                           {ping.location_address || `${ping.location_latitude.toFixed(5)}, ${ping.location_longitude.toFixed(5)}`}
                         </Text>
-                        <Ionicons name="open-outline" size={16} color="#f59e0b" style={{ marginLeft: 8 }} />
+                        <Ionicons name="open-outline" size={16} color={colors.brand} style={{ marginLeft: 8 }} />
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1209,285 +1306,442 @@ export default function DriverHomeScreen({ navigation }) {
   );
 }
 
+const StatusCard = ({ isOnDuty, onOffDutyPress, onSwitchModePress }) => {
+  return (
+    <View style={styles.statusCard}>
+      <View style={styles.statusCardLeft}>
+        <Text style={styles.statusLabel}>Current Status</Text>
+        <View style={[styles.statusPill, isOnDuty ? styles.statusPillOn : styles.statusPillOff]}>
+          <Ionicons
+            name={isOnDuty ? 'checkmark-circle' : 'alert-circle'}
+            size={16}
+            color={isOnDuty ? '#065F46' : '#B91C1C'}
+          />
+          <Text style={[styles.statusPillText, isOnDuty ? styles.statusPillTextOn : styles.statusPillTextOff]}>
+            {isOnDuty ? 'On Duty' : 'Off Duty'}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.statusCardRight}>
+        {isOnDuty && (
+          <TouchableOpacity style={styles.offDutyButton} onPress={onOffDutyPress}>
+            <Ionicons name="stop-circle" size={18} color="#EF4444" />
+            <Text style={styles.offDutyText}>Go Off Duty</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity style={styles.switchModeButton} onPress={onSwitchModePress}>
+          <Ionicons name="swap-horizontal" size={18} color={colors.brand} />
+          <Text style={styles.switchText}>Switch Mode</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+const ActiveTripCard = ({ route, passengerCount, tripStartTime, currentCapacity }) => {
+  const duration = tripStartTime ? Math.floor((new Date() - tripStartTime) / 60000) : 0;
+
+  const stats = [
+    { label: 'Passengers', value: passengerCount, icon: 'people' },
+    { label: 'Duration', value: `${duration}m`, icon: 'time' },
+    { label: 'Capacity', value: `${currentCapacity}%`, icon: 'speedometer' },
+  ];
+
+  return (
+    <View style={styles.activeTripCard}>
+      <View style={styles.activeTripHeader}>
+        <View style={styles.activeTripIcon}>
+          <Ionicons name="bus" size={28} color={colors.brand} />
+        </View>
+        <View style={styles.activeTripText}>
+          <Text style={styles.activeTripTitle}>Active Trip</Text>
+          <Text style={styles.activeTripRoute}>{route}</Text>
+        </View>
+        <View style={styles.activeTripBadge}>
+          <Text style={styles.activeTripBadgeText}>On Trip</Text>
+        </View>
+      </View>
+
+      <View style={styles.activeTripStats}>
+        {stats.map((item) => (
+          <View key={item.label} style={styles.activeTripStat}>
+            <Ionicons name={item.icon} size={20} color="#6B7280" />
+            <Text style={styles.activeTripStatLabel}>{item.label}</Text>
+            <Text style={styles.activeTripStatValue}>{item.value}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+const OverviewCard = ({ icon, color, value, title }) => {
+  return (
+    <View style={styles.overviewCard}>
+      <View style={[styles.overviewIcon, { backgroundColor: `${color}15` }]}>
+        <MaterialCommunityIcons name={icon} size={24} color={color} />
+      </View>
+      <View style={styles.overviewContent}>
+        <Text style={styles.overviewValue}>{value}</Text>
+        <Text style={styles.overviewLabel}>{title}</Text>
+      </View>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: colors.background,
   },
   headerContainer: {
-    backgroundColor: '#f59e0b',
-    paddingTop: 60,
-    paddingBottom: 32,
-    paddingHorizontal: 24,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 12,
+    backgroundColor: colors.brand,
+    paddingTop: Platform.OS === 'ios' 
+      ? (Constants.statusBarHeight || 44) + spacing.md
+      : (Constants.statusBarHeight || 24) + spacing.md,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    ...shadows.floating,
+  },
+  headerInner: {
+    paddingTop: 0,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
   },
   menuButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: spacing.md,
   },
   headerCenter: {
     flex: 1,
-    alignItems: 'center',
+    paddingHorizontal: spacing.md,
   },
   headerTitle: {
     color: '#fff',
     fontSize: 26,
-    fontWeight: '800',
-    marginBottom: 4,
+    fontWeight: '700',
+    marginBottom: 6,
     fontFamily: 'System',
     letterSpacing: -0.8,
   },
   headerSubtitle: {
     color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     fontFamily: 'System',
   },
   headerRightButtons: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
   },
-  profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  dutyStatus: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 24,
-    padding: 20,
-    marginTop: -20,
-    marginHorizontal: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  statusRow: {
+  headerStatusPill: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.pill,
+    flex: 1,
+    marginHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    ...shadows.card,
   },
-  statusInfo: {
-    flexShrink: 0,
-    marginRight: 16,
-    paddingTop: 4,
+  headerStatusPillOn: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#D1FAE5',
   },
-  statusLabel: {
-    color: '#6B7280',
-    fontSize: 14,
-    fontWeight: '500',
-    fontFamily: 'System',
-    marginBottom: 4,
+  headerStatusPillOff: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FEE2E2',
   },
-  statusText: {
-    fontSize: 18,
+  headerStatusIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  headerStatusIconContainerOn: {
+    backgroundColor: '#D1FAE5',
+  },
+  headerStatusIconContainerOff: {
+    backgroundColor: '#FEE2E2',
+  },
+  headerStatusContent: {
+    flexDirection: 'column',
+    flex: 1,
+    minWidth: 0,
+  },
+  headerStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  headerStatusTitle: {
+    fontSize: 15,
     fontWeight: '700',
     fontFamily: 'System',
+    letterSpacing: 0.2,
   },
-  buttonRow: {
-    flexDirection: 'column',
+  headerStatusTitleOn: {
+    color: '#065F46',
+  },
+  headerStatusTitleOff: {
+    color: '#991B1B',
+  },
+  headerStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  headerStatusDotOn: {
+    backgroundColor: '#10B981',
+  },
+  headerStatusDotOff: {
+    backgroundColor: '#EF4444',
+  },
+  headerStatusSubtitle: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'System',
+    marginTop: 1,
+    letterSpacing: 0.1,
+  },
+  statusCardWrapper: {
+    paddingHorizontal: spacing.xl,
+    marginTop: -spacing.xl,
+  },
+  statusCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 28,
+    padding: spacing.xl,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
+  },
+  statusCardLeft: {
+    flex: 1,
+    marginRight: spacing.lg,
+  },
+  statusLabel: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: spacing.sm,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 18,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs + 2,
+    gap: spacing.xs,
+  },
+  statusPillOn: {
+    backgroundColor: '#D1FAE5',
+  },
+  statusPillOff: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  statusPillTextOn: {
+    color: '#065F46',
+  },
+  statusPillTextOff: {
+    color: '#B91C1C',
+  },
+  statusCardRight: {
+    justifyContent: 'center',
     alignItems: 'flex-end',
-    flexShrink: 1,
-    paddingTop: 4,
+    gap: spacing.sm,
   },
   offDutyButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEF2F2',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: '#FECACA',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    gap: spacing.xs,
   },
   offDutyText: {
     color: '#DC2626',
     fontSize: 14,
     fontWeight: '600',
-    marginLeft: 6,
-    fontFamily: 'System',
   },
-  switchButton: {
+  switchModeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
+    backgroundColor: colors.surfaceSubtle,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-    marginTop: 8,
+    borderColor: colors.borderSubtle,
+    gap: spacing.xs,
   },
   switchText: {
     color: '#374151',
     fontSize: 14,
     fontWeight: '600',
-    marginLeft: 6,
-    fontFamily: 'System',
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
   },
-  currentTripCard: {
-    backgroundColor: '#FFFFFF',
+  activeTripCard: {
+    backgroundColor: colors.surface,
     borderRadius: 28,
-    padding: 28,
-    marginTop: 24,
-    marginBottom: 24,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 25,
-    elevation: 12,
-    borderWidth: 2,
-    borderColor: '#f0f9ff',
+    padding: spacing.xl,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+    ...shadows.card,
   },
-  tripHeader: {
+  activeTripHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
-  tripIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F0F9FF',
+  activeTripIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 20,
+    backgroundColor: '#FFF1D0',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: spacing.md,
   },
-  tripHeaderText: {
+  activeTripText: {
     flex: 1,
   },
-  currentTripTitle: {
+  activeTripTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#6B7280',
+    fontWeight: '500',
+    color: colors.textSecondary,
     marginBottom: 4,
-    fontFamily: 'System',
   },
-  tripRoute: {
-    fontSize: 20,
+  activeTripRoute: {
+    fontSize: 22,
     fontWeight: '700',
-    color: '#1A1A1A',
-    fontFamily: 'System',
+    color: colors.textPrimary,
     letterSpacing: -0.3,
   },
-  tripStats: {
+  activeTripBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+  },
+  activeTripBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#065F46',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  activeTripStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: spacing.md,
   },
-  tripStatItem: {
+  activeTripStat: {
     flex: 1,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginHorizontal: 4,
+    gap: spacing.sm,
   },
-  tripStatLabel: {
-    fontSize: 12,
-    color: '#6B7280',
+  activeTripStatLabel: {
+    fontSize: 13,
     fontWeight: '500',
-    marginTop: 8,
-    marginBottom: 4,
-    fontFamily: 'System',
+    color: colors.textSecondary,
   },
-  tripStatValue: {
+  activeTripStatValue: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    fontFamily: 'System',
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#1A1A1A',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
     fontFamily: 'System',
     letterSpacing: -0.3,
   },
   statsOverview: {
-    marginBottom: 32,
+    marginBottom: spacing.xl,
   },
-  statsRow: {
+  overviewGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    flexWrap: 'wrap',
+    gap: spacing.md,
   },
-  statCardHorizontal: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 6,
+  overviewCard: {
+    width: '48%',
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: colors.borderMuted,
+    ...shadows.card,
   },
-  statIconSmall: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
+  overviewIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     justifyContent: 'center',
-    marginRight: 16,
+    alignItems: 'center',
+    marginRight: spacing.md,
   },
-  statContent: {
+  overviewContent: {
     flex: 1,
   },
-  statValueSmall: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1A1A1A',
+  overviewValue: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: colors.textPrimary,
     marginBottom: 4,
-    fontFamily: 'System',
-    letterSpacing: -0.3,
   },
-  statTitleSmall: {
+  overviewLabel: {
     fontSize: 14,
-    color: '#6B7280',
     fontWeight: '500',
-    fontFamily: 'System',
+    color: colors.textSecondary,
   },
   quickActionsSection: {
     marginBottom: 32,
@@ -1700,7 +1954,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 24,
-    backgroundColor: '#f59e0b',
+    backgroundColor: colors.brand,
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 16,
@@ -1749,7 +2003,7 @@ const styles = StyleSheet.create({
   },
   modalSave: {
     fontSize: 16,
-    color: '#f59e0b',
+    color: colors.brand,
     fontWeight: '600',
     fontFamily: 'System',
   },
@@ -1788,7 +2042,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   counterButton: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: colors.brand,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -1839,13 +2093,13 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
   },
   pingButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing.sm,
     position: 'relative',
   },
   pingBadge: {
@@ -1860,7 +2114,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: '#f59e0b',
+    borderColor: colors.brand,
   },
   pingBadgeText: {
     color: '#fff',

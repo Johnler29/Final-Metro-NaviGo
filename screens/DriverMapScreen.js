@@ -7,6 +7,8 @@ import {
   Alert,
   Dimensions,
   AppState,
+  Animated,
+  Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -14,6 +16,7 @@ import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSupabase } from '../contexts/SupabaseContext';
+import { colors, spacing, radius, shadows } from '../styles/uiTheme';
 
 export default function DriverMapScreen({ navigation, route }) {
   const TRACKING_FLAG_KEY = 'isTrackingActive';
@@ -33,6 +36,10 @@ export default function DriverMapScreen({ navigation, route }) {
   const locationSubscription = useRef(null); // legacy watcher (not used in polling mode)
   const locationInterval = useRef(null);     // active 5s polling timer
   const { updateBusLocation, startDriverSession, endDriverSession, getStopsByRoute, routes, buses, driverBusAssignments } = useSupabase();
+  
+  // Animation values for card slide-up and button press feedback
+  const cardSlideAnim = useRef(new Animated.Value(0)).current;
+  const buttonScaleAnim = useRef({ recalc: new Animated.Value(1), info: new Animated.Value(1) }).current;
 
   useEffect(() => {
     getLocation();
@@ -46,6 +53,15 @@ export default function DriverMapScreen({ navigation, route }) {
       setPingUserInfo({ address, userName });
       console.log('📍 Ping location received:', { latitude, longitude, address, userName });
     }
+    
+    // Animate card slide-up on mount
+    Animated.spring(cardSlideAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 50,
+      friction: 8,
+      delay: 300,
+    }).start();
     
     // Handle app state changes for background tracking
     const handleAppStateChange = (nextAppState) => {
@@ -459,6 +475,20 @@ export default function DriverMapScreen({ navigation, route }) {
   };
 
   const handleRouteDeviation = () => {
+    // Button press animation
+    Animated.sequence([
+      Animated.timing(buttonScaleAnim.recalc, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonScaleAnim.recalc, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
     Alert.alert(
       'Route Deviation',
       'You are currently off your assigned route. Would you like to recalculate?',
@@ -467,6 +497,25 @@ export default function DriverMapScreen({ navigation, route }) {
         { text: 'Recalculate', onPress: () => Alert.alert('Recalculating', 'Route is being recalculated...') }
       ]
     );
+  };
+
+  const handleInfoPress = () => {
+    // Button press animation
+    Animated.sequence([
+      Animated.timing(buttonScaleAnim.info, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonScaleAnim.info, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    // Add your info action here
+    Alert.alert('Route Information', 'Detailed route information will be displayed here.');
   };
 
   const handleMenuPress = () => {
@@ -487,7 +536,7 @@ export default function DriverMapScreen({ navigation, route }) {
     return (
       <View style={styles.container}>
         <View style={styles.errorContainer}>
-          <Ionicons name="location-outline" size={64} color="#ff6b6b" />
+          <Ionicons name="location-outline" size={64} color={colors.danger} />
           <Text style={styles.errorTitle}>Location Error</Text>
           <Text style={styles.errorText}>{errorMsg}</Text>
           <View style={styles.errorButtons}>
@@ -547,32 +596,68 @@ export default function DriverMapScreen({ navigation, route }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Modern Header */}
       <View style={styles.headerContainer}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#374151" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Route Navigation</Text>
-          <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-            <Ionicons name="menu" size={24} color="#374151" />
-          </TouchableOpacity>
-        </View>
-        
-        {/* Location Accuracy Indicator */}
-        {locationAccuracy && (
-          <View style={styles.accuracyContainer}>
-            <Ionicons 
-              name="location" 
-              size={16} 
-              color={locationAccuracy <= 10 ? "#10B981" : locationAccuracy <= 20 ? "#F59E0B" : "#EF4444"} 
-            />
-            <Text style={styles.accuracyText}>
-              GPS Accuracy: {locationAccuracy <= 10 ? "High" : locationAccuracy <= 20 ? "Medium" : "Low"} 
-              ({Math.round(locationAccuracy)}m)
-            </Text>
+        <View style={styles.headerContent}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={22} color={colors.background} />
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Route Navigation</Text>
+              {driverSession?.status === 'active' && (
+                <View style={styles.headerStatusIndicator}>
+                  <View style={styles.headerStatusDot} />
+                  <Text style={styles.headerStatusText}>Live</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity 
+              style={styles.menuButton} 
+              onPress={handleMenuPress}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="menu" size={22} color={colors.background} />
+            </TouchableOpacity>
           </View>
-        )}
+          
+          {/* Location Accuracy Indicator - Enhanced */}
+          {locationAccuracy && (
+            <View style={[
+              styles.accuracyContainer,
+              {
+                backgroundColor: locationAccuracy <= 10 ? colors.brandSoft : locationAccuracy <= 20 ? colors.brandSoft : colors.brandSoft,
+                borderColor: locationAccuracy <= 10 ? colors.success : locationAccuracy <= 20 ? colors.brand : colors.danger,
+              }
+            ]}>
+              <View style={[
+                styles.accuracyIconContainer,
+                {
+                  backgroundColor: locationAccuracy <= 10 ? colors.success : locationAccuracy <= 20 ? colors.brand : colors.danger,
+                }
+              ]}>
+                <Ionicons 
+                  name="location" 
+                  size={14} 
+                  color={colors.background} 
+                />
+              </View>
+              <Text style={[
+                styles.accuracyText,
+                {
+                  color: locationAccuracy <= 10 ? colors.textPrimary : locationAccuracy <= 20 ? colors.textPrimary : colors.textPrimary,
+                }
+              ]}>
+                {locationAccuracy <= 10 ? "High" : locationAccuracy <= 20 ? "Medium" : "Low"} Accuracy
+                <Text style={styles.accuracyValue}> • {Math.round(locationAccuracy)}m</Text>
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
 
       <MapView
@@ -616,7 +701,7 @@ export default function DriverMapScreen({ navigation, route }) {
         {false && routeCoordinates.length > 1 && (
           <Polyline
             coordinates={routeCoordinates}
-            strokeColor="#f59e0b"
+            strokeColor={colors.brand}
             strokeWidth={4}
             lineDashPattern={[1]}
           />
@@ -645,66 +730,122 @@ export default function DriverMapScreen({ navigation, route }) {
               width: 40,
               height: 40,
               borderRadius: 20,
-              backgroundColor: '#3B82F6',
+              backgroundColor: colors.info,
               borderWidth: 3,
-              borderColor: '#FFFFFF',
+              borderColor: colors.background,
               justifyContent: 'center',
               alignItems: 'center',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.3,
-              shadowRadius: 4,
-              elevation: 5,
+              ...shadows.floating,
             }}>
-              <Ionicons name="person" size={20} color="#FFFFFF" />
+              <Ionicons name="person" size={20} color={colors.background} />
             </View>
           </Marker>
         )}
       </MapView>
 
-      {/* Compact Route Info Panel */}
-      <View style={styles.routePanel}>
+      {/* Minimalist Route Info Card */}
+      <Animated.View 
+        style={[
+          styles.routePanel,
+          {
+            transform: [
+              {
+                translateY: cardSlideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [100, 0],
+                }),
+              },
+            ],
+            opacity: cardSlideAnim,
+          },
+        ]}
+      >
+        {/* Compact Header */}
         <View style={styles.routeHeader}>
-          <View style={styles.routeTitleContainer}>
-            <Text style={styles.routeTitle}>Route 101</Text>
-            <View style={[styles.statusBadge, { backgroundColor: driverSession?.status === 'active' ? '#10B981' : '#6B7280' }]}>
-              <Text style={styles.statusBadgeText}>
-                {driverSession?.status === 'active' ? 'Trip Active' : 'No Trip'}
-              </Text>
-            </View>
+          <Text style={styles.routeTitle}>Route 101</Text>
+          <View style={[
+            styles.statusBadge, 
+            { 
+              backgroundColor: driverSession?.status === 'active' 
+                ? colors.brandSoft 
+                : colors.surfaceSubtle,
+            }
+          ]}>
+            <View style={[
+              styles.statusDot,
+              { backgroundColor: driverSession?.status === 'active' ? colors.success : colors.textMuted }
+            ]} />
+            <Text style={[
+              styles.statusBadgeText,
+              { color: driverSession?.status === 'active' ? colors.textPrimary : colors.textMuted }
+            ]}>
+              {driverSession?.status === 'active' ? 'Trip Active' : 'No Trip'}
+            </Text>
           </View>
         </View>
         
+        {/* Single Row Metrics with Dot Dividers */}
         <View style={styles.routeStats}>
           <View style={styles.statItem}>
-            <Ionicons name="time" size={16} color="#6B7280" />
+            <View style={styles.statIconContainer}>
+              <Ionicons name="time-outline" size={14} color={colors.brand} />
+            </View>
             <Text style={styles.statText}>15 min</Text>
           </View>
+          
+          <View style={styles.statDivider} />
+          
           <View style={styles.statItem}>
-            <Ionicons name="speedometer" size={16} color="#6B7280" />
+            <View style={styles.statIconContainer}>
+              <Ionicons name="speedometer-outline" size={14} color={colors.brand} />
+            </View>
             <Text style={styles.statText}>25 km/h</Text>
           </View>
+          
+          <View style={styles.statDivider} />
+          
           <View style={styles.statItem}>
-            <Ionicons name="people" size={16} color="#6B7280" />
+            <View style={styles.statIconContainer}>
+              <Ionicons name="people-outline" size={14} color={colors.brand} />
+            </View>
             <Text style={styles.statText}>32</Text>
           </View>
+          
+          <View style={styles.statDivider} />
+          
           <View style={styles.statItem}>
-            <Ionicons name="location" size={16} color="#6B7280" />
-            <Text style={styles.statText}>Central</Text>
+            <View style={styles.statIconContainer}>
+              <Ionicons name="location-outline" size={14} color={colors.brand} />
+            </View>
+            <Text style={styles.statText} numberOfLines={1}>Central</Text>
           </View>
         </View>
 
+        {/* Minimalist Pill Buttons */}
         <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.actionButton} onPress={handleRouteDeviation}>
-            <Ionicons name="refresh" size={18} color="#f59e0b" />
-            <Text style={styles.actionButtonText}>Recalc</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="information-circle" size={18} color="#f59e0b" />
-            <Text style={styles.actionButtonText}>Info</Text>
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: buttonScaleAnim.recalc }] }}>
+            <TouchableOpacity 
+              style={styles.actionButtonPrimary} 
+              onPress={handleRouteDeviation}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="refresh" size={16} color={colors.background} />
+              <Text style={styles.actionButtonPrimaryText}>Recalc</Text>
+            </TouchableOpacity>
+          </Animated.View>
+          
+          <Animated.View style={{ transform: [{ scale: buttonScaleAnim.info }] }}>
+            <TouchableOpacity 
+              style={styles.actionButtonSecondary} 
+              onPress={handleInfoPress}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+              <Text style={styles.actionButtonSecondaryText}>Info</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -712,67 +853,105 @@ export default function DriverMapScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: colors.background,
   },
   headerContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 60,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    backgroundColor: colors.brand,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 0,
+    ...shadows.card,
   },
-  accuracyContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  accuracyText: {
-    color: '#374151',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
-    fontFamily: 'System',
+  headerContent: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: spacing.md,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F8F9FA',
-    justifyContent: 'center',
+  headerTitleContainer: {
+    flex: 1,
     alignItems: 'center',
+    marginHorizontal: spacing.md,
   },
   headerTitle: {
-    color: '#1A1A1A',
-    fontSize: 24,
+    color: colors.background,
+    fontSize: 22,
     fontWeight: '700',
-    fontFamily: 'System',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
     letterSpacing: -0.5,
+    marginBottom: spacing.xs,
   },
-  menuButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F8F9FA',
+  headerStatusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+  },
+  headerStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.success,
+    marginRight: spacing.xs,
+  },
+  headerStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.success,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  menuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  accuracyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    marginTop: spacing.sm,
+  },
+  accuracyIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  accuracyText: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    letterSpacing: 0.2,
+  },
+  accuracyValue: {
+    fontSize: 12,
+    fontWeight: '500',
+    opacity: 0.7,
   },
   map: {
     flex: 1,
@@ -781,11 +960,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: colors.background,
   },
   loadingText: {
     fontSize: 20,
-    color: '#6B7280',
+    color: colors.textMuted,
     fontWeight: '500',
     fontFamily: 'System',
   },
@@ -793,159 +972,179 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
-    backgroundColor: '#FAFAFA',
+    padding: spacing.xxxl,
+    backgroundColor: colors.background,
   },
   errorTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#DC2626',
-    marginTop: 16,
-    marginBottom: 8,
+    color: colors.danger,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
     fontFamily: 'System',
     letterSpacing: -0.3,
   },
   errorText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
     fontWeight: '500',
     fontFamily: 'System',
+    lineHeight: 24,
   },
   errorButtons: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
+    gap: spacing.md,
   },
   retryButton: {
-    backgroundColor: '#f59e0b',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: colors.brand,
+    paddingHorizontal: spacing.xxxl,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.lg,
+    ...shadows.floating,
+    flex: 1,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: colors.background,
     fontSize: 16,
     fontWeight: '600',
     fontFamily: 'System',
+    textAlign: 'center',
   },
   defaultButton: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.xxxl,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.lg,
+    ...shadows.floating,
+    flex: 1,
   },
   defaultButtonText: {
-    color: '#FFFFFF',
+    color: colors.background,
     fontSize: 16,
     fontWeight: '600',
     fontFamily: 'System',
+    textAlign: 'center',
   },
   routePanel: {
     position: 'absolute',
-    bottom: 120,
-    left: 20,
-    right: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 4,
+    bottom: 100,
+    left: spacing.lg,
+    right: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    ...shadows.floating,
   },
   routeHeader: {
-    marginBottom: 12,
-  },
-  routeTitleContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: spacing.md,
   },
   routeTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    fontFamily: 'System',
+    fontWeight: '600',
+    color: colors.textPrimary,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
     letterSpacing: -0.3,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: spacing.xs,
   },
   statusBadgeText: {
     fontSize: 11,
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontFamily: 'System',
+    fontWeight: '500',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   routeStats: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingVertical: spacing.sm,
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 8,
     flex: 1,
-    marginHorizontal: 2,
     justifyContent: 'center',
   },
+  statIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.brandSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.xs,
+  },
   statText: {
-    fontSize: 12,
-    color: '#374151',
-    marginLeft: 4,
-    fontWeight: '600',
-    fontFamily: 'System',
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '500',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+  },
+  statDivider: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.borderSubtle,
+    marginHorizontal: spacing.sm,
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
+    gap: spacing.sm,
   },
-  actionButton: {
+  actionButtonPrimary: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: '#F8F9FA',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    flex: 1,
     justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    height: 44,
+    backgroundColor: colors.brand,
+    ...shadows.card,
   },
-  actionButtonText: {
-    fontSize: 12,
-    color: '#f59e0b',
+  actionButtonPrimaryText: {
+    fontSize: 14,
+    color: colors.background,
     fontWeight: '600',
-    marginLeft: 6,
-    fontFamily: 'System',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    marginLeft: spacing.xs,
   },
-  actionButtonActive: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
+  actionButtonSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    height: 44,
+    backgroundColor: colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
   },
-  actionButtonTextActive: {
-    color: '#EF4444',
+  actionButtonSecondaryText: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontWeight: '500',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    marginLeft: spacing.xs,
   },
 }); 

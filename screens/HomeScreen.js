@@ -6,30 +6,28 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  Image,
-  Dimensions,
   Alert,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { useDrawer } from '../contexts/DrawerContext';
+import AnimatedHamburgerButton from '../components/AnimatedHamburgerButton';
 import SetAlarmModal from '../components/SetAlarmModal';
-
-const { width } = Dimensions.get('window');
+import { colors, spacing, radius, shadows, cardStyles } from '../styles/uiTheme';
 
 const services = [
   {
     title: 'Set an Alarm',
     icon: 'alarm',
-    color: '#f59e0b',
+    color: colors.brand,
   },
   {
     title: 'Check Bus Schedules',
     icon: 'schedule',
-    color: '#f59e0b',
+    color: colors.brand,
   },
 ];
 
@@ -99,7 +97,7 @@ export default function HomeScreen({ navigation }) {
   } = useSupabase();
 
   // Get drawer context
-  const { openDrawer } = useDrawer();
+  const { drawerVisible, openDrawer, closeDrawer } = useDrawer();
 
   const handleServicePress = (service) => {
     if (service.title === 'Set an Alarm') {
@@ -123,7 +121,11 @@ export default function HomeScreen({ navigation }) {
   };
 
   const handleMenuPress = () => {
-    openDrawer();
+    if (drawerVisible) {
+      closeDrawer();
+    } else {
+      openDrawer();
+    }
   };
 
   // Request location permission and get current location
@@ -227,7 +229,7 @@ export default function HomeScreen({ navigation }) {
       .slice(0, 3); // Get top 3 closest buses
 
     setNearbyBuses(busesWithDistance);
-    console.log('🚌 Nearby buses calculated:', busesWithDistance.length);
+        console.log('🚌 Nearby buses calculated:', busesWithDistance.length);
   };
 
   const handleSubmitFeedback = async () => {
@@ -274,7 +276,7 @@ export default function HomeScreen({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#f59e0b" />
+        <ActivityIndicator size="large" color={colors.brand} />
         <Text style={styles.loadingText}>
           {connectionStatus === 'testing' ? 'Testing database connection...' : 'Loading bus data...'}
         </Text>
@@ -288,7 +290,7 @@ export default function HomeScreen({ navigation }) {
   if (error) {
     return (
       <View style={styles.errorContainer}>
-        <Ionicons name="warning" size={48} color="#F44336" />
+        <Ionicons name="warning" size={48} color={colors.danger} />
         <Text style={styles.errorText}>
           {connectionStatus === 'failed' ? 'Database Connection Failed' : 'Failed to load bus data'}
         </Text>
@@ -311,23 +313,27 @@ export default function HomeScreen({ navigation }) {
       {/* Header */}
       <View style={styles.headerContainer}>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-            <Ionicons name="menu" size={22} color="#fff" />
-          </TouchableOpacity>
-          
-          <View style={styles.locationContainer}>
-            <Ionicons 
-              name={location ? "location" : "location-outline"} 
-              size={14} 
-              color="#fff" 
-            />
-            <Text style={styles.locationText}>
-              {location ? "Location Active" : "Getting Location..."}
-            </Text>
+          <AnimatedHamburgerButton
+            isOpen={drawerVisible}
+            onToggle={handleMenuPress}
+          />
+
+          <View style={styles.locationPill}>
+            <View style={styles.locationStatusDot} />
+            <View style={styles.locationPillContent}>
+              <Ionicons
+                name={location ? 'location-outline' : 'location-outline'}
+                size={14}
+                color="#FFFFFF"
+              />
+              <Text style={styles.locationText}>
+                {location ? 'Location active' : 'Getting location…'}
+              </Text>
+            </View>
           </View>
-          
-          <TouchableOpacity style={styles.profileButton} onPress={handleProfilePress}>
-            <Ionicons name="person-circle" size={28} color="#fff" />
+
+          <TouchableOpacity style={styles.headerIconButton} onPress={handleProfilePress}>
+            <Ionicons name="person-circle-outline" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -339,20 +345,21 @@ export default function HomeScreen({ navigation }) {
       >
         {/* Modern Welcome Section with Quick Stats */}
         <View style={styles.welcomeSection}>
-          <Text style={styles.welcome}>Welcome to Metro Link</Text>
+          <Text style={styles.greeting}>{getGreeting()}</Text>
+          <Text style={styles.welcome}>Metro Link</Text>
           <View style={styles.quickStatsRow}>
             <View style={styles.quickStatCard}>
-              <Ionicons name="bus" size={20} color="#f59e0b" />
+              <Ionicons name="bus" size={20} color={colors.brand} />
               <Text style={styles.quickStatNumber}>{buses.length}</Text>
               <Text style={styles.quickStatLabel}>Buses</Text>
             </View>
             <View style={styles.quickStatCard}>
-              <Ionicons name="navigate" size={20} color="#10b981" />
+              <Ionicons name="navigate" size={20} color={colors.success} />
               <Text style={styles.quickStatNumber}>{routes.length}</Text>
               <Text style={styles.quickStatLabel}>Routes</Text>
             </View>
             <View style={styles.quickStatCard}>
-              <Ionicons name="location" size={20} color="#3b82f6" />
+              <Ionicons name="location" size={20} color={colors.info} />
               <Text style={styles.quickStatNumber}>{nearbyBuses.length}</Text>
               <Text style={styles.quickStatLabel}>Nearby</Text>
             </View>
@@ -363,18 +370,18 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.searchSection}>
           <Text style={styles.sectionLabel}>Search</Text>
           <View style={styles.searchBar}>
-            <Ionicons name="search" size={20} color="#aaa" style={{ marginLeft: 10 }} />
+            <Ionicons name="search" size={20} color={colors.textMuted} style={{ marginLeft: spacing.md }} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search your bus routes"
-              placeholderTextColor="#aaa"
+              placeholderTextColor={colors.textMuted}
               value={search}
               onChangeText={setSearch}
               onSubmitEditing={handleSearch}
               returnKeyType="search"
             />
             <TouchableOpacity style={styles.notificationButton}>
-              <Ionicons name="notifications" size={20} color="#f59e0b" />
+              <Ionicons name="notifications-outline" size={20} color={colors.brand} />
             </TouchableOpacity>
           </View>
         </View>
@@ -385,7 +392,7 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.sectionLabel}>Quick Actions</Text>
             <TouchableOpacity style={styles.viewAllButton}>
               <Text style={styles.viewAllText}>View All</Text>
-              <Ionicons name="arrow-forward" size={14} color="#f59e0b" />
+              <Ionicons name="arrow-forward" size={14} color={colors.brand} />
             </TouchableOpacity>
           </View>
           <View style={styles.servicesRow}>
@@ -396,11 +403,11 @@ export default function HomeScreen({ navigation }) {
                   styles.modernServiceCard,
                   pressed && styles.cardPressed,
                 ]}
-                android_ripple={{ color: '#ffe4b3' }}
+                android_ripple={{ color: colors.brandSoft }}
                 onPress={() => handleServicePress(service)}
               >
                 <View style={styles.serviceIconContainer}>
-                  <MaterialIcons name={service.icon} size={28} color={service.color} />
+                  <MaterialIcons name={service.icon} size={28} color={service.color || colors.brand} />
                 </View>
                 <Text style={styles.modernServiceTitle}>{service.title}</Text>
                 <View style={styles.modernArrowContainer}>
@@ -418,14 +425,14 @@ export default function HomeScreen({ navigation }) {
           </Text>
           {location && (
             <TouchableOpacity style={styles.refreshButton} onPress={getCurrentLocation}>
-              <Ionicons name="refresh" size={16} color="#f59e0b" />
+              <Ionicons name="refresh" size={16} color={colors.brand} />
             </TouchableOpacity>
           )}
         </View>
         
         {!location ? (
           <View style={styles.locationPromptContainer}>
-            <Ionicons name="location-outline" size={48} color="#f59e0b" />
+            <Ionicons name="location-outline" size={48} color={colors.brand} />
             <Text style={styles.locationPromptText}>Enable location to see nearby buses</Text>
             <TouchableOpacity style={styles.enableLocationButton} onPress={getCurrentLocation}>
               <Text style={styles.enableLocationButtonText}>Enable Location</Text>
@@ -528,9 +535,17 @@ export default function HomeScreen({ navigation }) {
           </View>
         ) : (
           <View style={styles.noBusesContainer}>
-            <Ionicons name="bus" size={48} color="#ccc" />
-            <Text style={styles.noBusesText}>No buses found nearby</Text>
-            <Text style={styles.noBusesSubtext}>Try refreshing or check back later</Text>
+            <View style={styles.emptyBusIllustration}>
+              <View style={styles.emptyBusBody}>
+                <Ionicons name="bus-outline" size={36} color={colors.textSecondary} />
+              </View>
+              <View style={styles.emptyBusWheelsRow}>
+                <View style={styles.emptyWheel} />
+                <View style={styles.emptyWheel} />
+              </View>
+            </View>
+            <Text style={styles.noBusesText}>No nearby buses right now</Text>
+            <Text style={styles.noBusesSubtext}>We’ll show live buses here as soon as they’re close to you.</Text>
           </View>
         )}
 
@@ -545,7 +560,7 @@ export default function HomeScreen({ navigation }) {
               <TextInput
                 style={styles.feedbackInput}
                 placeholder="Submit your feedback here..."
-                placeholderTextColor="#aaa"
+                placeholderTextColor={colors.textMuted}
                 value={feedback}
                 onChangeText={setFeedback}
                 multiline
@@ -565,7 +580,7 @@ export default function HomeScreen({ navigation }) {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Ionicons name="send" size={16} color="#fff" />
+                  <Ionicons name="arrow-forward" size={18} color="#fff" />
                   <Text style={styles.submitButtonText}>Submit</Text>
                 </>
               )}
@@ -587,29 +602,29 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   loadingSubtext: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
     marginTop: 4,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     paddingHorizontal: 20,
   },
   errorText: {
@@ -639,39 +654,45 @@ const styles = StyleSheet.create({
   },
   noBusesContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.xl,
   },
   noBusesText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 12,
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: spacing.md,
     textAlign: 'center',
   },
   noBusesSubtext: {
     fontSize: 14,
-    color: '#999',
-    marginTop: 4,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
     textAlign: 'center',
   },
   locationPromptContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    marginBottom: 25,
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.xl,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    marginBottom: spacing.xxl,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
   },
   locationPromptText: {
     fontSize: 16,
-    color: '#666',
-    marginTop: 12,
-    marginBottom: 16,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
     textAlign: 'center',
   },
   enableLocationButton: {
-    backgroundColor: '#f59e0b',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: colors.brand,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
   },
   enableLocationButtonText: {
     color: '#fff',
@@ -679,16 +700,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   headerContainer: {
-    backgroundColor: '#f59e0b',
-    paddingTop: 60,
-    paddingBottom: 32,
-    paddingHorizontal: 24,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 12,
-    position: 'relative',
+    paddingTop: 52,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    backgroundColor: colors.brand,
+    ...shadows.floating,
   },
   headerRow: {
     flexDirection: 'row',
@@ -696,57 +714,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 48,
   },
-  menuButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  locationContainer: {
+  locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
     flex: 1,
-    marginHorizontal: 16,
+    marginHorizontal: spacing.lg,
     justifyContent: 'center',
   },
+  locationStatusDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#00C853',
+    marginRight: spacing.sm,
+  },
+  locationPillContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   locationText: {
-    color: '#fff',
+    color: '#333333',
     fontSize: 13,
-    marginLeft: 6,
+    marginLeft: spacing.xs,
     fontFamily: 'System',
     fontWeight: '600',
     letterSpacing: 0.3,
   },
-  profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   scroll: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xl,
   },
   contentContainer: {
-    paddingBottom: 120,
+    paddingBottom: spacing.xxxl * 3,
   },
   welcomeSection: {
-    marginTop: 24,
-    marginBottom: 32,
+    marginTop: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  greeting: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    fontFamily: 'System',
+    letterSpacing: 0.1,
   },
   welcome: {
     fontSize: 32,
     fontWeight: '800',
-    marginBottom: 20,
-    color: '#1a1a1a',
+    marginBottom: spacing.lg,
+    color: colors.textPrimary,
     fontFamily: 'System',
     letterSpacing: -1,
     lineHeight: 38,
@@ -754,68 +784,65 @@ const styles = StyleSheet.create({
   quickStatsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: spacing.md,
   },
   quickStatCard: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
   },
   quickStatNumber: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
-    color: '#1a1a1a',
-    marginTop: 8,
-    marginBottom: 4,
+    color: colors.textPrimary,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
   },
   quickStatLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#666',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   searchSection: {
-    marginBottom: 32,
+    marginBottom: spacing.xxl,
   },
   servicesSection: {
-    marginBottom: 40,
+    marginBottom: spacing.xxxl,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
   },
   viewAllText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#f59e0b',
+    color: colors.brand,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   sectionLabel: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     fontFamily: 'System',
     letterSpacing: -0.5,
   },
@@ -823,156 +850,134 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f0f9f0',
+    backgroundColor: colors.surfaceSubtle,
     justifyContent: 'center',
     alignItems: 'center',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 28,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+    ...shadows.card,
   },
   searchInput: {
     flex: 1,
     height: 56,
     fontSize: 16,
-    paddingHorizontal: 20,
-    color: '#1a1a1a',
+    paddingHorizontal: spacing.lg,
+    color: colors.textPrimary,
     fontFamily: 'System',
     fontWeight: '400',
   },
   notificationButton: {
-    width: 48,
-    height: 48,
-    marginRight: 12,
-    borderRadius: 24,
-    backgroundColor: '#f8f9fa',
+    width: 32,
+    height: 32,
+    marginRight: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSubtle,
     justifyContent: 'center',
     alignItems: 'center',
   },
   servicesRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 16,
+    gap: spacing.lg,
   },
   modernServiceCard: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
     position: 'relative',
     borderWidth: 1,
-    borderColor: '#f0f0f0',
-    minHeight: 140,
+    borderColor: colors.borderSubtle,
+    minHeight: 132,
     justifyContent: 'space-between',
+    ...shadows.card,
   },
   serviceIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: '#fff5e6',
+    width: 52,
+    height: 52,
+    borderRadius: radius.lg,
+    backgroundColor: colors.brandSoft,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#ffe4b3',
+    marginBottom: spacing.sm,
   },
   modernServiceTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     lineHeight: 20,
     fontFamily: 'System',
     letterSpacing: -0.2,
   },
   modernArrowContainer: {
     position: 'absolute',
-    right: 12,
-    top: 12,
+    right: spacing.md,
+    top: spacing.md,
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#f59e0b',
+    backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    ...shadows.card,
   },
   cardPressed: {
     transform: [{ scale: 0.97 }],
     opacity: 0.9,
   },
   busesContainer: {
-    marginBottom: 40,
+    marginBottom: spacing.xxxl,
   },
   busesScrollContainer: {
-    paddingRight: 24,
+    paddingRight: spacing.xl,
     paddingLeft: 0,
   },
   modernBusCard: {
     width: 340,
-    backgroundColor: '#fff',
-    borderRadius: 32,
-    marginRight: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    marginRight: spacing.lg,
+    padding: spacing.xl,
     position: 'relative',
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: colors.borderSubtle,
+    ...shadows.floating,
   },
   etaBadgeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   etaBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f59e0b',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    backgroundColor: colors.brand,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    ...shadows.card,
   },
   etaBadgeText: {
     color: '#fff',
     fontSize: 15,
     fontWeight: '800',
-    marginLeft: 6,
+    marginLeft: spacing.xs,
     letterSpacing: 0.3,
   },
   modernStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    gap: spacing.xs,
   },
   statusDot: {
     width: 6,
@@ -989,42 +994,40 @@ const styles = StyleSheet.create({
   busHeroSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 20,
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.borderMuted,
   },
   busIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
-    backgroundColor: '#fff5e6',
+    width: 56,
+    height: 56,
+    borderRadius: radius.lg,
+    backgroundColor: colors.brandSoft,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
-    borderWidth: 2,
-    borderColor: '#ffe4b3',
+    marginRight: spacing.lg,
   },
   busMainInfo: {
     flex: 1,
   },
   modernBusNumber: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
-    color: '#1a1a1a',
-    marginBottom: 6,
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
     letterSpacing: -0.5,
   },
   modernRouteBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0fdf4',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: '#d1fae5',
+    borderColor: '#A7F3D0',
   },
   modernRouteText: {
     fontSize: 13,
@@ -1035,10 +1038,10 @@ const styles = StyleSheet.create({
   infoGrid: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
   },
   infoGridItem: {
     flex: 1,
@@ -1047,17 +1050,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   infoIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#fff',
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    ...shadows.card,
   },
   infoGridLabel: {
     fontSize: 11,
@@ -1070,7 +1069,7 @@ const styles = StyleSheet.create({
   infoGridValue: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
   },
   infoGridDivider: {
     width: 1,
@@ -1082,15 +1081,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f59e0b',
-    borderRadius: 20,
-    paddingVertical: 16,
+    backgroundColor: colors.brand,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
     gap: 8,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    ...shadows.floating,
   },
   trackButtonText: {
     color: '#fff',
@@ -1102,10 +1097,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 16,
-    paddingTop: 16,
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: colors.borderMuted,
   },
   liveIndicator: {
     width: 8,
@@ -1117,7 +1112,7 @@ const styles = StyleSheet.create({
   modernLastUpdatedText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#999',
+    color: colors.textMuted,
   },
   busHeader: {
     flexDirection: 'row',
@@ -1268,15 +1263,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   feedbackSection: {
-    marginBottom: 40,
-    paddingTop: 24,
+    marginBottom: spacing.xxxl,
+    paddingTop: spacing.xl,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: colors.borderMuted,
   },
   feedbackDescription: {
     fontSize: 15,
-    color: '#666',
-    marginBottom: 24,
+    color: colors.textSecondary,
+    marginBottom: spacing.xl,
     lineHeight: 24,
     fontFamily: 'System',
     fontWeight: '500',
@@ -1286,30 +1281,26 @@ const styles = StyleSheet.create({
   },
   feedbackInputContainer: {
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   feedbackInput: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
-    padding: 24,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: spacing.xl,
     fontSize: 15,
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     fontFamily: 'System',
-    minHeight: 160,
+    minHeight: 152,
     textAlignVertical: 'top',
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 8,
+    ...shadows.card,
     fontWeight: '500',
   },
   characterCount: {
     position: 'absolute',
-    bottom: 8,
-    right: 12,
+    bottom: spacing.sm,
+    right: spacing.md,
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -1317,22 +1308,18 @@ const styles = StyleSheet.create({
   },
   characterCountText: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
     fontFamily: 'System',
   },
   submitButton: {
-    backgroundColor: '#f59e0b',
-    borderRadius: 28,
-    paddingVertical: 18,
-    paddingHorizontal: 48,
+    backgroundColor: colors.brand,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxl,
     alignItems: 'center',
     alignSelf: 'center',
     flexDirection: 'row',
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 12,
+    ...shadows.floating,
   },
   submitButtonDisabled: {
     backgroundColor: '#ccc',
@@ -1345,5 +1332,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: 'System',
     marginLeft: 8,
+  },
+  emptyBusIllustration: {
+    marginBottom: spacing.lg,
+    alignItems: 'center',
+  },
+  emptyBusBody: {
+    width: 120,
+    height: 64,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceSubtle,
+    borderWidth: 0,
+    borderColor: colors.surfaceSubtle,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.card,
+  },
+  emptyBusWheelsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: 88,
+    marginTop: spacing.sm,
+  },
+  emptyWheel: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.borderSubtle,
   },
 }); 

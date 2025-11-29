@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { useAuth } from '../contexts/AuthContext';
+import { colors, spacing, radius, shadows } from '../styles/uiTheme';
 
 const { width } = Dimensions.get('window');
 
@@ -233,7 +234,7 @@ export default function DriverProfileScreen({ navigation }) {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#f59e0b" />
+          <ActivityIndicator size="large" color={colors.brand} />
           <Text style={styles.loadingText}>Loading profile...</Text>
         </View>
       </View>
@@ -250,7 +251,7 @@ export default function DriverProfileScreen({ navigation }) {
     return (
       <View style={styles.container}>
         <View style={styles.errorContainer}>
-          <Ionicons name="warning" size={48} color="#F44336" />
+          <Ionicons name="warning" size={48} color={colors.danger} />
           <Text style={styles.errorText}>Failed to load profile</Text>
           <Text style={styles.errorSubtext}>{errorMessage}</Text>
           <Text style={styles.errorSubtext}>
@@ -283,19 +284,33 @@ export default function DriverProfileScreen({ navigation }) {
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
-            <Ionicons name="person-circle" size={80} color="#f59e0b" />
+            <View style={styles.avatarBackground}>
+              <Ionicons name="person-circle" size={80} color={colors.brand} />
+            </View>
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.driverName}>{driver.name}</Text>
             <Text style={styles.licenseNumber}>License: {driver.license_number}</Text>
-            <Text style={styles.driverStatus}>
-              Status: <Text style={[styles.statusText, { color: driver.status === 'active' ? '#10B981' : '#EF4444' }]}>
-                {driver.status === 'active' ? 'Active' : 'Inactive'}
-              </Text>
-            </Text>
+            <View style={styles.statusContainer}>
+              <View style={[
+                styles.statusBadge,
+                driver.status === 'active' ? styles.statusBadgeActive : styles.statusBadgeInactive
+              ]}>
+                <View style={[
+                  styles.statusDot,
+                  driver.status === 'active' ? styles.statusDotActive : styles.statusDotInactive
+                ]} />
+                <Text style={[
+                  styles.statusText,
+                  driver.status === 'active' ? styles.statusTextActive : styles.statusTextInactive
+                ]}>
+                  {driver.status === 'active' ? 'Active' : 'Inactive'}
+                </Text>
+              </View>
+            </View>
           </View>
           <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
-            <Ionicons name="create-outline" size={20} color="#f59e0b" />
+            <Ionicons name="create-outline" size={20} color={colors.brand} />
           </TouchableOpacity>
         </View>
 
@@ -304,15 +319,21 @@ export default function DriverProfileScreen({ navigation }) {
           <Text style={styles.sectionTitle}>Contact Information</Text>
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
-              <Ionicons name="call" size={20} color="#666" />
+              <View style={styles.infoIconContainer}>
+                <Ionicons name="call" size={18} color={colors.brand} />
+              </View>
               <Text style={styles.infoText}>{driver.phone || 'Not provided'}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Ionicons name="mail" size={20} color="#666" />
+              <View style={styles.infoIconContainer}>
+                <Ionicons name="mail" size={18} color={colors.brand} />
+              </View>
               <Text style={styles.infoText}>{driver.email || 'Not provided'}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Ionicons name="car" size={20} color="#666" />
+              <View style={styles.infoIconContainer}>
+                <Ionicons name="car" size={18} color={colors.brand} />
+              </View>
               <Text style={styles.infoText}>
                 Current Bus: {currentBus ? `${currentBus.bus_number} ${currentBus.name || ''}`.trim() : 'N/A'}
               </Text>
@@ -326,22 +347,30 @@ export default function DriverProfileScreen({ navigation }) {
             <Text style={styles.sectionTitle}>Performance Statistics</Text>
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
-                <MaterialCommunityIcons name="car-multiple" size={24} color="#4CAF50" />
+                <View style={[styles.statIconContainer, { backgroundColor: '#ECFDF5' }]}>
+                  <MaterialCommunityIcons name="car-multiple" size={24} color={colors.success} />
+                </View>
                 <Text style={styles.statValue}>{performanceStats.totalTrips}</Text>
                 <Text style={styles.statLabel}>Total Trips</Text>
               </View>
               <View style={styles.statCard}>
-                <MaterialCommunityIcons name="account-group" size={24} color="#2196F3" />
+                <View style={[styles.statIconContainer, { backgroundColor: '#EFF6FF' }]}>
+                  <MaterialCommunityIcons name="account-group" size={24} color={colors.info} />
+                </View>
                 <Text style={styles.statValue}>{performanceStats.totalPassengers}</Text>
                 <Text style={styles.statLabel}>Passengers</Text>
               </View>
               <View style={styles.statCard}>
-                <MaterialCommunityIcons name="speedometer" size={24} color="#FF9800" />
+                <View style={[styles.statIconContainer, { backgroundColor: colors.brandSoft }]}>
+                  <MaterialCommunityIcons name="speedometer" size={24} color={colors.brand} />
+                </View>
                 <Text style={styles.statValue}>{performanceStats.totalDistance} km</Text>
                 <Text style={styles.statLabel}>Distance</Text>
               </View>
               <View style={styles.statCard}>
-                <MaterialCommunityIcons name="clock-check" size={24} color="#9C27B0" />
+                <View style={[styles.statIconContainer, { backgroundColor: '#F3E8FF' }]}>
+                  <MaterialCommunityIcons name="clock-check" size={24} color="#9333EA" />
+                </View>
                 <Text style={styles.statValue}>{performanceStats.onTimePercentage}%</Text>
                 <Text style={styles.statLabel}>On Time</Text>
               </View>
@@ -375,24 +404,32 @@ export default function DriverProfileScreen({ navigation }) {
           <Text style={styles.sectionTitle}>Account Settings</Text>
           <View style={styles.actionsList}>
             <TouchableOpacity style={styles.actionItem} onPress={handleChangePassword}>
-              <Ionicons name="key" size={20} color="#666" />
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="key" size={20} color={colors.brand} />
+              </View>
               <Text style={styles.actionText}>Change Password</Text>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionItem}>
-              <Ionicons name="notifications" size={20} color="#666" />
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="notifications" size={20} color={colors.brand} />
+              </View>
               <Text style={styles.actionText}>Notification Settings</Text>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionItem}>
-              <Ionicons name="help-circle" size={20} color="#666" />
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="help-circle" size={20} color={colors.brand} />
+              </View>
               <Text style={styles.actionText}>Help & Support</Text>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionItem} onPress={handleLogout}>
-              <Ionicons name="log-out" size={20} color="#F44336" />
-              <Text style={[styles.actionText, { color: '#F44336' }]}>Logout</Text>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            <TouchableOpacity style={[styles.actionItem, styles.actionItemDanger]} onPress={handleLogout}>
+              <View style={[styles.actionIconContainer, styles.actionIconContainerDanger]}>
+                <Ionicons name="log-out" size={20} color={colors.danger} />
+              </View>
+              <Text style={[styles.actionText, styles.actionTextDanger]}>Logout</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
         </View>
@@ -458,20 +495,16 @@ export default function DriverProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: colors.background,
   },
   headerContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingTop: 60,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.xl,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    borderBottomColor: colors.borderSubtle,
+    ...shadows.card,
   },
   headerRow: {
     flexDirection: 'row',
@@ -481,14 +514,14 @@ const styles = StyleSheet.create({
   backButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F8F9FA',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSubtle,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    color: '#1A1A1A',
-    fontSize: 24,
+    color: colors.textPrimary,
+    fontSize: 22,
     fontWeight: '700',
     fontFamily: 'System',
     letterSpacing: -0.5,
@@ -496,211 +529,288 @@ const styles = StyleSheet.create({
   menuButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F8F9FA',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSubtle,
     justifyContent: 'center',
     alignItems: 'center',
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xl,
   },
   profileHeader: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
-    marginTop: 24,
-    marginBottom: 24,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    marginTop: spacing.xl,
+    marginBottom: spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: colors.borderSubtle,
+    ...shadows.floating,
   },
   avatarContainer: {
-    marginRight: 20,
+    marginRight: spacing.xl,
+  },
+  avatarBackground: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: colors.brandSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: colors.brandSoftStrong,
   },
   profileInfo: {
     flex: 1,
+    minWidth: 0,
   },
   driverName: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 6,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
     fontFamily: 'System',
     letterSpacing: -0.3,
+    lineHeight: 30,
   },
   licenseNumber: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginBottom: 4,
+    fontSize: 15,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
     fontWeight: '500',
     fontFamily: 'System',
   },
   driverStatus: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: 15,
+    color: colors.textSecondary,
     fontWeight: '500',
     fontFamily: 'System',
   },
+  statusContainer: {
+    marginTop: spacing.xs,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    gap: spacing.xs,
+  },
+  statusBadgeActive: {
+    backgroundColor: '#D1FAE5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  statusBadgeInactive: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusDotActive: {
+    backgroundColor: colors.success,
+  },
+  statusDotInactive: {
+    backgroundColor: colors.danger,
+  },
   statusText: {
+    fontSize: 13,
     fontWeight: '700',
+    fontFamily: 'System',
+    letterSpacing: 0.2,
+  },
+  statusTextActive: {
+    color: '#065F46',
+  },
+  statusTextInactive: {
+    color: '#991B1B',
   },
   editButton: {
-    padding: 12,
-    borderRadius: 24,
-    backgroundColor: '#F8F9FA',
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.brandSoftStrong,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: spacing.xl,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 16,
+    color: colors.textPrimary,
+    marginBottom: spacing.lg,
     fontFamily: 'System',
     letterSpacing: -0.3,
   },
   infoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    backgroundColor: '#F8F9FA',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surfaceSubtle,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+  },
+  infoIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   infoText: {
-    fontSize: 16,
-    color: '#374151',
-    marginLeft: 16,
+    fontSize: 15,
+    color: colors.textPrimary,
+    marginLeft: spacing.md,
     fontWeight: '500',
     fontFamily: 'System',
+    flex: 1,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: spacing.md,
   },
   statCard: {
-    width: (width - 72) / 2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
+    width: (width - spacing.xl * 2 - spacing.md) / 2,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
     alignItems: 'center',
-    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
+  },
+  statIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#1A1A1A',
-    marginTop: 12,
-    marginBottom: 6,
+    color: colors.textPrimary,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
     fontFamily: 'System',
     letterSpacing: -0.5,
   },
   statLabel: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 13,
+    color: colors.textSecondary,
     textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
     fontFamily: 'System',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   weeklyStats: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
   },
   weeklyStat: {
     flex: 1,
     alignItems: 'center',
   },
   weeklyValue: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
-    color: '#f59e0b',
-    marginBottom: 6,
+    color: colors.brand,
+    marginBottom: spacing.xs,
     fontFamily: 'System',
     letterSpacing: -0.3,
   },
   weeklyLabel: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 13,
+    color: colors.textSecondary,
     textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
     fontFamily: 'System',
   },
   actionsList: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: colors.borderSubtle,
+    overflow: 'hidden',
+    ...shadows.card,
   },
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    padding: spacing.xl,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.borderMuted,
+  },
+  actionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionIconContainerDanger: {
+    backgroundColor: '#FEE2E2',
   },
   actionText: {
     fontSize: 16,
-    color: '#374151',
-    marginLeft: 16,
+    color: colors.textPrimary,
+    marginLeft: spacing.md,
     flex: 1,
     fontWeight: '500',
     fontFamily: 'System',
+  },
+  actionTextDanger: {
+    color: colors.danger,
+    fontWeight: '600',
+  },
+  actionItemDanger: {
+    borderBottomWidth: 0,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: colors.background,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 18,
-    color: '#6B7280',
+    marginTop: spacing.lg,
+    fontSize: 16,
+    color: colors.textSecondary,
     fontWeight: '500',
     fontFamily: 'System',
   },
@@ -708,37 +818,33 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
-    backgroundColor: '#FAFAFA',
+    padding: spacing.xxxl,
+    backgroundColor: colors.background,
   },
   errorText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#DC2626',
-    marginTop: 16,
-    marginBottom: 12,
+    color: colors.danger,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
     textAlign: 'center',
     fontFamily: 'System',
     letterSpacing: -0.3,
   },
   errorSubtext: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginBottom: 16,
+    fontSize: 15,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
     textAlign: 'center',
     fontWeight: '500',
     fontFamily: 'System',
   },
   retryButton: {
-    backgroundColor: '#f59e0b',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: colors.brand,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxl,
+    borderRadius: radius.lg,
+    ...shadows.floating,
   },
   retryButtonText: {
     color: '#FFFFFF',
@@ -748,62 +854,59 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: colors.background,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#FFFFFF',
+    padding: spacing.xl,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    borderBottomColor: colors.borderSubtle,
+    ...shadows.card,
   },
   modalCancel: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '600',
     fontFamily: 'System',
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.textPrimary,
     fontFamily: 'System',
     letterSpacing: -0.3,
   },
   modalSave: {
     fontSize: 16,
-    color: '#f59e0b',
+    color: colors.brand,
     fontWeight: '600',
     fontFamily: 'System',
   },
   modalContent: {
     flex: 1,
-    padding: 24,
+    padding: spacing.xl,
   },
   inputGroup: {
-    marginBottom: 24,
+    marginBottom: spacing.xl,
   },
   inputLabel: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#374151',
-    marginBottom: 12,
+    color: colors.textPrimary,
+    marginBottom: spacing.md,
     fontFamily: 'System',
   },
   textInput: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.borderSubtle,
     fontFamily: 'System',
+    color: colors.textPrimary,
   },
 });

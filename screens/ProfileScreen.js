@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { useDrawer } from '../contexts/DrawerContext';
+import { colors, spacing, radius, shadows } from '../styles/uiTheme';
 
 export default function ProfileScreen({ navigation }) {
   const { user, signOut } = useAuth();
@@ -55,25 +56,25 @@ export default function ProfileScreen({ navigation }) {
     {
       title: 'Edit Profile',
       icon: 'person-outline',
-      color: '#f59e0b',
+      color: colors.brand,
       onPress: handleEditProfile,
     },
     {
       title: 'Settings',
       icon: 'settings-outline',
-      color: '#3b82f6',
+      color: colors.info,
       onPress: handleSettings,
     },
     {
       title: 'Help & Support',
       icon: 'help-circle-outline',
-      color: '#10b981',
+      color: colors.success,
       onPress: () => navigation.getParent()?.navigate('Help'),
     },
     {
       title: 'About',
       icon: 'information-circle-outline',
-      color: '#8b5cf6',
+      color: colors.textSecondary,
       onPress: () => Alert.alert('About', 'Metro NaviGo v1.0.0\nPublic Transit App'),
     },
   ];
@@ -101,7 +102,7 @@ export default function ProfileScreen({ navigation }) {
       <View style={styles.headerContainer}>
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-            <Ionicons name="menu" size={22} color="#fff" />
+            <Ionicons name="menu-outline" size={22} color="#fff" />
           </TouchableOpacity>
           
           <View style={styles.headerTitleContainer}>
@@ -124,7 +125,7 @@ export default function ProfileScreen({ navigation }) {
               <Text style={styles.avatarText}>{getUserInitials()}</Text>
             </View>
             <TouchableOpacity style={styles.editAvatarButton} onPress={handleEditProfile}>
-              <Ionicons name="camera" size={16} color="#fff" />
+              <Ionicons name="camera-outline" size={16} color="#fff" />
             </TouchableOpacity>
           </View>
           
@@ -132,7 +133,7 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.userEmail}>{user?.email || 'No email'}</Text>
           
           <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
-            <Ionicons name="pencil" size={16} color="#f59e0b" />
+            <Ionicons name="pencil-outline" size={16} color={colors.brand} />
             <Text style={styles.editButtonText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
@@ -168,7 +169,7 @@ export default function ProfileScreen({ navigation }) {
               style={styles.menuItem}
               onPress={item.onPress}
             >
-              <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}15` }]}>
+              <View style={styles.menuIconContainer}>
                 <Ionicons name={item.icon} size={22} color={item.color} />
               </View>
               <Text style={styles.menuItemText}>{item.title}</Text>
@@ -179,7 +180,7 @@ export default function ProfileScreen({ navigation }) {
 
         {/* Sign Out Button */}
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <Ionicons name="log-out-outline" size={20} color="#F44336" />
+          <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
@@ -195,18 +196,14 @@ export default function ProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   headerContainer: {
-    backgroundColor: '#f59e0b',
-    paddingTop: 60,
-    paddingBottom: 32,
-    paddingHorizontal: 24,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 12,
+    backgroundColor: colors.brand,
+    paddingTop: 52,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    ...shadows.floating,
     position: 'relative',
   },
   headerRow: {
@@ -216,10 +213,10 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   menuButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -228,7 +225,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: 'System',
@@ -241,22 +238,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 40,
+    paddingBottom: spacing.xxxl,
   },
   profileCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     marginTop: -40,
-    marginHorizontal: 24,
-    borderRadius: 24,
-    padding: 32,
+    marginHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 8,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: colors.borderSubtle,
+    ...shadows.floating,
   },
   avatarContainer: {
     position: 'relative',
@@ -266,11 +259,11 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#f59e0b',
+    backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
   },
   avatarText: {
     fontSize: 40,
@@ -285,58 +278,54 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f59e0b',
+    backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    borderColor: colors.surface,
+    ...shadows.card,
   },
   userName: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.textPrimary,
     marginBottom: 4,
     fontFamily: 'System',
     letterSpacing: -0.5,
   },
   userEmail: {
     fontSize: 15,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 20,
     fontFamily: 'System',
   },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#FFF9E6',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceSubtle,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: colors.borderSubtle,
     gap: 6,
   },
   editButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#f59e0b',
+    color: colors.brand,
     fontFamily: 'System',
   },
   statsSection: {
-    paddingHorizontal: 24,
-    marginTop: 32,
-    marginBottom: 24,
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.xxxl,
+    marginBottom: spacing.xl,
   },
   sectionLabel: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 16,
+    color: colors.textPrimary,
+    marginBottom: spacing.lg,
     fontFamily: 'System',
     letterSpacing: -0.3,
   },
@@ -347,22 +336,18 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
   },
   statNumber: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#1A1A1A',
+    color: colors.textPrimary,
     marginTop: 8,
     marginBottom: 4,
     fontFamily: 'System',
@@ -370,34 +355,31 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     fontFamily: 'System',
   },
   menuSection: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.xl,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: colors.borderSubtle,
+    ...shadows.card,
   },
   menuIconContainer: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSubtle,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -406,35 +388,34 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
     fontFamily: 'System',
   },
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 24,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
+    backgroundColor: colors.brand,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
     gap: 8,
   },
   signOutText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F44336',
+    color: '#FFFFFF',
     fontFamily: 'System',
   },
   versionContainer: {
     alignItems: 'center',
-    marginTop: 24,
-    paddingTop: 24,
+    marginTop: spacing.xl,
+    paddingTop: spacing.lg,
   },
   versionText: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontWeight: '500',
     fontFamily: 'System',
   },

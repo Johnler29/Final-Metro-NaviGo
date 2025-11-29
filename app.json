@@ -19,6 +19,13 @@
       "bundleIdentifier": "com.yourcompany.metrobustracker",
       "config": {
         "googleMapsApiKey": "AIzaSyAtz31ET-f9agUbnJuR-tR35Gk8GdsTRic"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Allow Metro Link Tracker to use your location to show nearby buses, stops, and navigation while the app is in use.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Metro Link Tracker to access your location in the background so your bus can be tracked in real time even when the app is minimized.",
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -34,7 +41,10 @@
         "INTERNET",
         "ACCESS_BACKGROUND_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
       "config": {
         "googleMaps": {
@@ -52,7 +62,8 @@
           "locationAlwaysAndWhenInUsePermission": "Allow Metro Link Tracker to use your location to show nearby buses and stops."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ],
     "extra": {
       "GOOGLE_MAPS_API_KEY": "AIzaSyAtz31ET-f9agUbnJuR-tR35Gk8GdsTRic",
