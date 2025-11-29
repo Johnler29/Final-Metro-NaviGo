@@ -46,9 +46,14 @@ export default function DriverLoginScreen({ navigation, onLoginSuccess, onBackTo
             status: driverData.driver_status,
             is_active: driverData.is_active
           }));
-          console.log('✅ Driver session stored:', driverData);
+
+          // Whenever a driver logs in, start from a clean "off duty" state.
+          // Clear any previous active trip so the app doesn't auto-set On Duty.
+          await AsyncStorage.removeItem('currentTrip');
+
+          console.log('✅ Driver session stored and previous trip cleared:', driverData);
         } catch (storageError) {
-          console.error('Error storing driver session:', storageError);
+          console.error('Error storing driver session or clearing trip:', storageError);
         }
         
         Alert.alert('Success', 'Login successful!', [

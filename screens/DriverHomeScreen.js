@@ -162,22 +162,39 @@ export default function DriverHomeScreen({ navigation }) {
           return;
         }
 
-        if (!isOnDuty) {
-          setIsOnDuty(true);
-        }
-
-        if (!currentTrip) {
-          const storedTrip = await AsyncStorage.getItem('currentTrip');
-          if (storedTrip) {
-            setCurrentTrip(JSON.parse(storedTrip));
+        // Only restore duty state if there's an active trip stored
+        // Drivers should start as "off duty" by default when logging in
+        const storedTrip = await AsyncStorage.getItem('currentTrip');
+        if (storedTrip) {
+          try {
+            const trip = JSON.parse(storedTrip);
+            // Only restore if trip data is valid and has required fields
+            if (trip && trip.busId && trip.startTime) {
+              setCurrentTrip(trip);
+              setIsOnDuty(true);
+              
+              // Only set background duty status if there's an active trip
+              if (currentBus?.id) {
+                await setDriverBackgroundDutyStatus('on_trip');
+              }
+            } else {
+              // Invalid trip data - clear it and stay off duty
+              await AsyncStorage.removeItem('currentTrip');
+              setIsOnDuty(false);
+            }
+          } catch (parseError) {
+            // Invalid trip data - clear it
+            await AsyncStorage.removeItem('currentTrip');
+            setIsOnDuty(false);
           }
-        }
-
-        if (currentBus?.id) {
-          await setDriverBackgroundDutyStatus('on_trip');
+        } else {
+          // No stored trip - driver should be off duty
+          setIsOnDuty(false);
         }
       } catch (hydrateError) {
         console.warn('⚠️ Failed to hydrate driver duty state:', hydrateError?.message || hydrateError);
+        // On error, default to off duty
+        setIsOnDuty(false);
       }
     };
 
