@@ -202,15 +202,24 @@ export const SupabaseProvider = ({ children }) => {
           const exists = prevBuses.some(b => b.id === updatedBus.id);
           const merged = prevBuses.map(bus => {
             if (bus.id !== updatedBus.id) return bus;
+            
+            // Only update coordinates if the new update has valid coordinates
+            // This prevents overwriting valid coordinates with null/undefined when
+            // status or other non-location fields are updated
+            const shouldUpdateCoordinates = hasValidCoordinates;
+            const preservedLatitude = shouldUpdateCoordinates ? updatedBus.latitude : bus.latitude;
+            const preservedLongitude = shouldUpdateCoordinates ? updatedBus.longitude : bus.longitude;
+            
             return {
               ...bus,
-              // location & telemetry
-              latitude: updatedBus.latitude,
-              longitude: updatedBus.longitude,
-              speed: updatedBus.speed,
-              heading: updatedBus.heading,
-              tracking_status: updatedBus.tracking_status,
-              last_location_update: updatedBus.last_location_update || updatedBus.updated_at,
+              // location & telemetry - only update if new coordinates are valid
+              latitude: preservedLatitude,
+              longitude: preservedLongitude,
+              // Only update speed/heading if they're provided (they can be null)
+              speed: updatedBus.speed != null ? updatedBus.speed : bus.speed,
+              heading: updatedBus.heading != null ? updatedBus.heading : bus.heading,
+              tracking_status: updatedBus.tracking_status || bus.tracking_status,
+              last_location_update: updatedBus.last_location_update || bus.last_location_update || updatedBus.updated_at,
               // visibility-critical fields
               status: updatedBus.status,
               driver_id: updatedBus.driver_id,
@@ -296,17 +305,74 @@ export const SupabaseProvider = ({ children }) => {
   };
 
   // Poll bus data in development for fallback real-time updates
+  // IMPORTANT: Do NOT overwrite newer real-time coordinates with older polled data.
+  // The passenger map (RealtimeBusMap) relies on Supabase real-time as the source
+  // of truth for GPS. This dev-only poll should only:
+  //   - bootstrap initial data, and
+  //   - refresh non-location fields (status, driver, etc.)
+  // while preserving any more recent latitude/longitude already in state.
   useEffect(() => {
     if (SAFE_MODE) return; // disable polling in safe mode
     if (!__DEV__) return; // Only run in development
+
     const pollInterval = setInterval(async () => {
       try {
         const busesData = await supabaseHelpers.getBuses();
-        setBuses(busesData || []);
+
+        setBuses((prevBuses) => {
+          const incoming = busesData || [];
+
+          // First load or no previous data: just take what we got.
+          if (!prevBuses || prevBuses.length === 0) {
+            return incoming;
+          }
+
+          const prevMap = new Map(prevBuses.map((b) => [b.id, b]));
+
+          const merged = incoming.map((bus) => {
+            const existing = prevMap.get(bus.id);
+            if (!existing) {
+              // New bus – use server values as-is
+              return bus;
+            }
+
+            const hasExistingCoords =
+              typeof existing.latitude === 'number' &&
+              Number.isFinite(existing.latitude) &&
+              typeof existing.longitude === 'number' &&
+              Number.isFinite(existing.longitude);
+
+            const hasIncomingCoords =
+              typeof bus.latitude === 'number' &&
+              Number.isFinite(bus.latitude) &&
+              typeof bus.longitude === 'number' &&
+              Number.isFinite(bus.longitude);
+
+            // Start from the latest non-location fields from the server,
+            // but preserve more reliable coordinates already in memory.
+            const mergedBus = {
+              ...existing,
+              ...bus,
+            };
+
+            // If we already have valid coordinates and the polled data either
+            // has no coordinates or clearly invalid ones, keep the in-memory
+            // position instead of snapping the marker back.
+            if (hasExistingCoords && !hasIncomingCoords) {
+              mergedBus.latitude = existing.latitude;
+              mergedBus.longitude = existing.longitude;
+            }
+
+            return mergedBus;
+          });
+
+          return merged;
+        });
       } catch (err) {
         console.warn('⚠️ Error polling buses:', err.message);
       }
     }, 1500);
+
     return () => clearInterval(pollInterval);
   }, []);
 

@@ -21,6 +21,106 @@ import RoutePolyline from './RoutePolyline';
 
 const { width, height } = Dimensions.get('window');
 
+// Animated Bus Marker Component for smooth position transitions
+const AnimatedBusMarker = React.memo(({ bus, isSelected, markerColor, onPress }) => {
+  const [animatedCoord, setAnimatedCoord] = useState({
+    latitude: Number(bus.latitude),
+    longitude: Number(bus.longitude)
+  });
+  const prevCoordRef = useRef({ 
+    latitude: Number(bus.latitude), 
+    longitude: Number(bus.longitude) 
+  });
+  const animationFrameRef = useRef(null);
+  const startTimeRef = useRef(null);
+
+  useEffect(() => {
+    const newLat = Number(bus.latitude);
+    const newLng = Number(bus.longitude);
+    const prevLat = prevCoordRef.current.latitude;
+    const prevLng = prevCoordRef.current.longitude;
+
+    // Only animate if coordinates actually changed
+    if (newLat !== prevLat || newLng !== prevLng) {
+      // Cancel any ongoing animation
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+
+      // Calculate distance to determine animation duration
+      const latDiff = newLat - prevLat;
+      const lngDiff = newLng - prevLng;
+      const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+      
+      // Duration based on distance: 800ms to 1800ms
+      // For typical bus movement (2 second updates), use ~1800ms for smooth transition
+      // This ensures the animation completes just before the next update arrives
+      const duration = Math.min(Math.max(distance * 2500, 800), 1800);
+      
+      const startLat = prevLat;
+      const startLng = prevLng;
+      const startTime = Date.now();
+
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Use easing function for smooth deceleration
+        const eased = 1 - Math.pow(1 - progress, 3); // Cubic ease-out
+        
+        const currentLat = startLat + (latDiff * eased);
+        const currentLng = startLng + (lngDiff * eased);
+        
+        setAnimatedCoord({
+          latitude: currentLat,
+          longitude: currentLng
+        });
+
+        if (progress < 1) {
+          animationFrameRef.current = requestAnimationFrame(animate);
+        } else {
+          // Animation complete, update reference
+          prevCoordRef.current = { latitude: newLat, longitude: newLng };
+        }
+      };
+
+      startTimeRef.current = Date.now();
+      animationFrameRef.current = requestAnimationFrame(animate);
+    }
+  }, [bus.latitude, bus.longitude]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <Marker
+      key={bus.bus_id}
+      coordinate={animatedCoord}
+      title={bus.bus_name || 'Bus'}
+      description={`${bus.route_name || 'Unknown Route'} • ${bus.capacity_status || 'unknown'}`}
+      onPress={onPress}
+      tracksViewChanges={false}
+      anchor={{ x: 0.5, y: 0.5 }}
+    >
+      <View style={[
+        styles.busMarker,
+        {
+          backgroundColor: markerColor,
+          transform: [{ scale: isSelected ? 1.2 : 1 }]
+        }
+      ]}>
+        <Text style={styles.busIcon}>🚌</Text>
+      </View>
+    </Marker>
+  );
+});
+
 const RealtimeBusMap = ({ 
   initialRegion, 
   onBusSelect, 
@@ -53,8 +153,9 @@ const RealtimeBusMap = ({
   const pendingUpdates = useRef(new Map());
   const updateTimer = useRef(null);
   
-  // Throttle bus updates - only update UI every 5 seconds per bus (prevents lag/freezing)
-  const THROTTLE_MS = 5000; // Update UI at most every 5 seconds per bus
+  // Throttle bus updates - only update UI every 2 seconds per bus (prevents lag/freezing)
+  // With smooth animation, 2 seconds provides good balance between smoothness and performance
+  const THROTTLE_MS = 2000; // Update UI at most every 2 seconds per bus
   const mapRef = useRef(null);
   const userLocationRef = useRef(userLocation);
   const selectedBusRef = useRef(null);
@@ -413,14 +514,21 @@ const RealtimeBusMap = ({
         
         const updatedBuses = prevBuses.map(bus => {
           if (bus.bus_id === busId) {
+            const newTrackingStatus = updatedBus.tracking_status || bus.tracking_status || 'moving';
+            const newCapacityPercentage = updatedBus.capacity_percentage ?? bus.capacity_percentage ?? 0;
+            
             return {
               ...bus,
               latitude: updatedBus.latitude,
               longitude: updatedBus.longitude,
-              tracking_status: updatedBus.tracking_status,
-              current_passengers: updatedBus.current_passengers,
-              capacity_percentage: updatedBus.capacity_percentage,
-              last_location_update: updatedBus.updated_at || updatedBus.last_location_update,
+              tracking_status: newTrackingStatus,
+              is_moving: newTrackingStatus === 'moving',
+              current_passengers: updatedBus.current_passengers ?? bus.current_passengers,
+              capacity_percentage: newCapacityPercentage,
+              capacity_status: newCapacityPercentage >= 90 ? 'full' : 
+                              newCapacityPercentage >= 70 ? 'crowded' : 
+                              newCapacityPercentage >= 40 ? 'moderate' : 'light',
+              last_location_update: updatedBus.updated_at || updatedBus.last_location_update || bus.last_location_update,
               location_status: 'live'
             };
           }
@@ -589,12 +697,20 @@ const RealtimeBusMap = ({
   }, []);
 
   // Get bus marker color based on status
+  // Green: only if bus is moving
+  // Red: only if bus is full
   const getBusMarkerColor = (bus) => {
-    if (bus.location_status === 'offline') return '#9CA3AF';
+    if (!bus) return '#10B981'; // Default to green for active buses
+    
+    // Red: only if bus is full
     if (bus.capacity_status === 'full') return '#EF4444';
-    if (bus.capacity_status === 'crowded') return '#F59E0B';
-    if (bus.is_moving) return '#10B981';
-    return '#3B82F6';
+    
+    // Green: only if bus is moving
+    const isMoving = bus.is_moving || (bus.tracking_status === 'moving');
+    if (isMoving) return '#10B981';
+    
+    // Default: green for active buses (stopped but not full)
+    return '#10B981';
   };
 
   // Get bus icon based on status
@@ -607,16 +723,23 @@ const RealtimeBusMap = ({
   };
 
   // Get bus marker color based on status
+  // Green: only if bus is moving
+  // Red: only if bus is full
   const getBusMarkerColorSafe = useCallback((bus) => {
-    if (!bus) return '#3B82F6';
-    if (bus.location_status === 'offline') return '#9CA3AF';
+    if (!bus) return '#10B981'; // Default to green for active buses
+    
+    // Red: only if bus is full
     if (bus.capacity_status === 'full') return '#EF4444';
-    if (bus.capacity_status === 'crowded') return '#F59E0B';
-    if (bus.is_moving) return '#10B981';
-    return '#3B82F6';
+    
+    // Green: only if bus is moving
+    const isMoving = bus.is_moving || (bus.tracking_status === 'moving');
+    if (isMoving) return '#10B981';
+    
+    // Default: green for active buses (stopped but not full)
+    return '#10B981';
   }, []);
 
-  // Render bus marker - simplified to prevent crashes
+  // Render bus marker with smooth animation
   const renderBusMarker = useCallback((bus) => {
     if (!bus || !bus.bus_id || bus.latitude == null || bus.longitude == null) {
       return null;
@@ -627,32 +750,17 @@ const RealtimeBusMap = ({
       const markerColor = getBusMarkerColorSafe(bus);
       
       return (
-        <Marker
+        <AnimatedBusMarker
           key={bus.bus_id}
-          coordinate={{
-            latitude: Number(bus.latitude),
-            longitude: Number(bus.longitude)
-          }}
-          title={bus.bus_name || 'Bus'}
-          description={`${bus.route_name || 'Unknown Route'} • ${bus.capacity_status || 'unknown'}`}
+          bus={bus}
+          isSelected={isSelected}
+          markerColor={markerColor}
           onPress={() => {
             if (onBusSelect) {
               onBusSelect(bus);
             }
           }}
-          tracksViewChanges={false}
-          anchor={{ x: 0.5, y: 0.5 }}
-        >
-          <View style={[
-            styles.busMarker,
-            {
-              backgroundColor: markerColor,
-              transform: [{ scale: isSelected ? 1.2 : 1 }]
-            }
-          ]}>
-            <Text style={styles.busIcon}>🚌</Text>
-          </View>
-        </Marker>
+        />
       );
     } catch (error) {
       console.error('Error rendering bus marker:', error);
