@@ -592,39 +592,48 @@ export default function DriverHomeScreen({ navigation }) {
           Alert.alert('Already on duty', 'You are already on an active trip.');
         } else {
           try {
-            setIsOnDuty(true);
-            setTripStartTime(new Date());
-            
-            // Start trip in database
+            const now = new Date();
+
             // Use a default route ID if currentBus.route_id is null/undefined
             const routeId = currentBus.route_id || routes[0]?.id;
             if (!routeId) {
               Alert.alert('Error', 'No route available for this bus. Please contact support.');
-              setIsOnDuty(false);
               return;
             }
-            
+
+            // Start trip in backend (RPC first, with legacy fallback)
             const tripResult = await startTrip(currentDriver.id, currentBus.id, routeId);
-            
-            // Update driver status
-            await updateDriverStatus(currentDriver.id, 'active');
-            
-            // Create driver session in database
-            const driverSession = await startDriverSession(currentDriver.id, currentBus.id);
-            
-            // Store session in AsyncStorage
-            await AsyncStorage.setItem('driverSession', JSON.stringify(driverSession));
-            
+
+            // Update driver status (best‑effort; do not fail trip if this throws)
+            try {
+              await updateDriverStatus(currentDriver.id, 'active');
+            } catch (statusError) {
+              console.warn('⚠️ Failed to update driver status on trip start:', statusError?.message || statusError);
+            }
+
+            // Create driver session in database (used for admin/analytics)
+            let driverSession = null;
+            try {
+              driverSession = await startDriverSession(currentDriver.id, currentBus.id);
+              await AsyncStorage.setItem('driverSession', JSON.stringify(driverSession));
+            } catch (sessionError) {
+              console.warn('⚠️ Failed to start driver session on trip start:', sessionError?.message || sessionError);
+            }
+
+            const resolvedRoute = routes.find(r => r.id === (currentBus.route_id || routeId));
             const tripData = {
-              route: `Route ${routes.find(r => r.id === currentBus.route_id)?.route_number || 'Unknown'}`,
-              startTime: new Date().toLocaleTimeString(),
+              route: `Route ${resolvedRoute?.route_number || 'Unknown'}`,
+              startTime: now.toLocaleTimeString(),
               passengers: 0,
               busId: currentBus.id,
-              scheduleId: tripResult?.id || schedules.find(s => s.bus_id === currentBus.id && s.status === 'scheduled')?.id
+              // tripResult may be a schedule row or a minimal RPC payload
+              scheduleId: tripResult?.id || schedules.find(s => s.bus_id === currentBus.id && s.is_active)?.id || null,
             };
-            
+
+            setIsOnDuty(true);
+            setTripStartTime(now);
             setCurrentTrip(tripData);
-            
+
             // Store trip data in AsyncStorage for other screens to access
             await AsyncStorage.setItem('currentTrip', JSON.stringify(tripData));
 
@@ -641,7 +650,14 @@ export default function DriverHomeScreen({ navigation }) {
             Alert.alert('Trip Started', 'Your trip has been started successfully.');
           } catch (error) {
             console.error('Error starting trip:', error);
-            Alert.alert('Error', 'Failed to start trip. Please try again.');
+            // Roll back to a safe "off duty" state if anything failed
+            setIsOnDuty(false);
+            setCurrentTrip(null);
+            setTripStartTime(null);
+            setPassengerCount(0);
+
+            const message = error?.message || 'Failed to start trip. Please try again.';
+            Alert.alert('Error', message);
           }
         }
         break;

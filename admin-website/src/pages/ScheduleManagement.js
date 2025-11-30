@@ -26,11 +26,37 @@ const ScheduleManagement = () => {
     driverId: '',
     departureTime: '',
     arrivalTime: '',
-    dayOfWeek: 'monday',
+    daysOfWeek: [1], // Array of integers: 1=Monday, 2=Tuesday, etc.
     isActive: true,
     frequency: 'daily',
     notes: ''
   });
+
+  // Helper function to convert day name to integer (1=Monday, 2=Tuesday, etc.)
+  const dayNameToInt = (dayName) => {
+    const days = { monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 7 };
+    return days[dayName.toLowerCase()] || 1;
+  };
+
+  // Helper function to convert integer to day name
+  const intToDayName = (dayInt) => {
+    const days = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday', 7: 'sunday' };
+    return days[dayInt] || 'monday';
+  };
+
+  // Helper function to convert frequency to days array
+  const frequencyToDays = (frequency) => {
+    switch (frequency) {
+      case 'daily':
+        return [1, 2, 3, 4, 5, 6, 7]; // All days
+      case 'weekdays':
+        return [1, 2, 3, 4, 5]; // Monday-Friday
+      case 'weekends':
+        return [6, 7]; // Saturday-Sunday
+      default:
+        return [1]; // Default to Monday
+    }
+  };
 
   // Load statistics
   useEffect(() => {
@@ -39,11 +65,19 @@ const ScheduleManagement = () => {
         const today = new Date().toISOString().split('T')[0];
         const dayOfWeek = new Date().toLocaleDateString('en-US', { weekday: 'lowercase' });
         
-        const [totalSchedules, activeToday, routesWithSchedules] = await Promise.all([
+        const todayDayNumber = new Date().getDay(); // 0=Sunday, 1=Monday, etc.
+        const dbDayNumber = todayDayNumber === 0 ? 7 : todayDayNumber; // Convert to 1=Monday, 7=Sunday format
+        
+        const [totalSchedules, activeTodayResult, routesWithSchedules] = await Promise.all([
           supabase.from('schedules').select('id', { count: 'exact' }),
-          supabase.from('schedules').select('id', { count: 'exact' }).eq('day_of_week', dayOfWeek).eq('is_active', true),
+          supabase.from('schedules').select('id, days_of_week').eq('is_active', true),
           supabase.from('schedules').select('route_id').eq('is_active', true)
         ]);
+
+        // Filter schedules that include today's day
+        const activeToday = activeTodayResult.data?.filter(s => 
+          s.days_of_week && Array.isArray(s.days_of_week) && s.days_of_week.includes(dbDayNumber)
+        ).length || 0;
 
         setStats({
           totalSchedules: totalSchedules.count || 0,
@@ -64,10 +98,25 @@ const ScheduleManagement = () => {
     loadStats();
   }, [schedules, supabase]);
 
+  // Helper functions - defined before use
+  const getRouteName = (routeId) => {
+    const route = routes.find(r => r.id === routeId);
+    return route ? route.name : 'Unknown Route';
+  };
+
+  const getBusInfo = (busId) => {
+    const bus = buses.find(b => b.id === busId);
+    return bus ? `${bus.bus_number} - ${bus.name}` : 'No Bus Assigned';
+  };
+
   // Filter schedules
   const filteredSchedules = schedules.filter(schedule => {
-    const matchesSearch = schedule.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         schedule.frequency?.toLowerCase().includes(searchTerm.toLowerCase());
+    // Search by route name or bus info
+    const routeName = getRouteName(schedule.route_id)?.toLowerCase() || '';
+    const busInfo = getBusInfo(schedule.bus_id)?.toLowerCase() || '';
+    const matchesSearch = !searchTerm || 
+                         routeName.includes(searchTerm.toLowerCase()) ||
+                         busInfo.includes(searchTerm.toLowerCase());
     const matchesRoute = filterRoute === 'all' || schedule.route_id === filterRoute;
     const matchesStatus = filterStatus === 'all' || 
                          (filterStatus === 'active' ? schedule.is_active : !schedule.is_active);
@@ -79,18 +128,20 @@ const ScheduleManagement = () => {
     e.preventDefault();
     
     try {
+      // Convert frequency to days array if needed, otherwise use selected days
+      const daysOfWeek = scheduleForm.frequency === 'custom' 
+        ? scheduleForm.daysOfWeek 
+        : frequencyToDays(scheduleForm.frequency);
+
       const { data, error } = await supabase
         .from('schedules')
         .insert([{
           route_id: scheduleForm.routeId,
-          bus_id: scheduleForm.busId,
-          driver_id: scheduleForm.driverId,
+          bus_id: scheduleForm.busId || null,
           departure_time: scheduleForm.departureTime,
-          arrival_time: scheduleForm.arrivalTime,
-          day_of_week: scheduleForm.dayOfWeek,
-          is_active: scheduleForm.isActive,
-          frequency: scheduleForm.frequency,
-          notes: scheduleForm.notes
+          arrival_time: scheduleForm.arrivalTime || null,
+          days_of_week: daysOfWeek, // Array of integers
+          is_active: scheduleForm.isActive
         }])
         .select();
 
@@ -104,7 +155,7 @@ const ScheduleManagement = () => {
         driverId: '',
         departureTime: '',
         arrivalTime: '',
-        dayOfWeek: 'monday',
+        daysOfWeek: [1],
         isActive: true,
         frequency: 'daily',
         notes: ''
@@ -118,16 +169,23 @@ const ScheduleManagement = () => {
   // Handle edit schedule
   const handleEditSchedule = (schedule) => {
     setEditingSchedule(schedule);
+    // Convert days_of_week array to determine frequency
+    const daysArray = schedule.days_of_week || [1];
+    let frequency = 'custom';
+    if (daysArray.length === 7) frequency = 'daily';
+    else if (daysArray.length === 5 && daysArray.every(d => [1,2,3,4,5].includes(d))) frequency = 'weekdays';
+    else if (daysArray.length === 2 && daysArray.every(d => [6,7].includes(d))) frequency = 'weekends';
+
     setScheduleForm({
       routeId: schedule.route_id || '',
       busId: schedule.bus_id || '',
-      driverId: schedule.driver_id || '',
+      driverId: '', // driver_id doesn't exist in schedules table
       departureTime: schedule.departure_time || '',
       arrivalTime: schedule.arrival_time || '',
-      dayOfWeek: schedule.day_of_week || 'monday',
-      isActive: schedule.is_active,
-      frequency: schedule.frequency || 'daily',
-      notes: schedule.notes || ''
+      daysOfWeek: daysArray, // Use the array from database
+      isActive: schedule.is_active !== undefined ? schedule.is_active : true,
+      frequency: frequency,
+      notes: '' // notes doesn't exist in schedules table
     });
     setShowEditSchedule(true);
   };
@@ -137,18 +195,20 @@ const ScheduleManagement = () => {
     e.preventDefault();
     
     try {
+      // Convert frequency to days array if needed, otherwise use selected days
+      const daysOfWeek = scheduleForm.frequency === 'custom' 
+        ? scheduleForm.daysOfWeek 
+        : frequencyToDays(scheduleForm.frequency);
+
       const { data, error } = await supabase
         .from('schedules')
         .update({
           route_id: scheduleForm.routeId,
-          bus_id: scheduleForm.busId,
-          driver_id: scheduleForm.driverId,
+          bus_id: scheduleForm.busId || null,
           departure_time: scheduleForm.departureTime,
-          arrival_time: scheduleForm.arrivalTime,
-          day_of_week: scheduleForm.dayOfWeek,
-          is_active: scheduleForm.isActive,
-          frequency: scheduleForm.frequency,
-          notes: scheduleForm.notes
+          arrival_time: scheduleForm.arrivalTime || null,
+          days_of_week: daysOfWeek, // Array of integers
+          is_active: scheduleForm.isActive
         })
         .eq('id', editingSchedule.id)
         .select();
@@ -164,7 +224,7 @@ const ScheduleManagement = () => {
         driverId: '',
         departureTime: '',
         arrivalTime: '',
-        dayOfWeek: 'monday',
+        daysOfWeek: [1],
         isActive: true,
         frequency: 'daily',
         notes: ''
@@ -193,17 +253,6 @@ const ScheduleManagement = () => {
     }
   };
 
-  // Get route name by ID
-  const getRouteName = (routeId) => {
-    const route = routes.find(r => r.id === routeId);
-    return route ? route.name : 'Unknown Route';
-  };
-
-  // Get bus info by ID
-  const getBusInfo = (busId) => {
-    const bus = buses.find(b => b.id === busId);
-    return bus ? `${bus.bus_number} - ${bus.name}` : 'No Bus Assigned';
-  };
 
   return (
     <div className="space-y-6">
@@ -348,10 +397,7 @@ const ScheduleManagement = () => {
                       Schedule
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Day
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Frequency
+                      Days
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -389,11 +435,13 @@ const ScheduleManagement = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
-                        {schedule.day_of_week}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
-                        {schedule.frequency}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {schedule.days_of_week && Array.isArray(schedule.days_of_week) 
+                          ? schedule.days_of_week.map(d => {
+                              const dayNames = {1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun'};
+                              return dayNames[d] || d;
+                            }).join(', ')
+                          : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -443,21 +491,24 @@ const ScheduleManagement = () => {
                 <div className="p-2">Sunday</div>
               </div>
               <div className="grid grid-cols-7 gap-2">
-                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
-                  <div key={day} className="min-h-32 p-2 border border-gray-200 rounded-lg">
-                    <div className="text-xs font-medium text-gray-600 mb-2 capitalize">{day}</div>
-                    <div className="space-y-1">
-                      {filteredSchedules
-                        .filter(s => s.day_of_week === day)
-                        .map(schedule => (
-                          <div key={schedule.id} className="text-xs p-1 bg-blue-50 rounded border-l-2 border-blue-400">
-                            <div className="font-medium">{getRouteName(schedule.route_id)}</div>
-                            <div className="text-gray-600">{schedule.departure_time}</div>
-                          </div>
-                        ))}
+                {[1, 2, 3, 4, 5, 6, 7].map(dayNum => {
+                  const dayNames = {1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday'};
+                  return (
+                    <div key={dayNum} className="min-h-32 p-2 border border-gray-200 rounded-lg">
+                      <div className="text-xs font-medium text-gray-600 mb-2">{dayNames[dayNum]}</div>
+                      <div className="space-y-1">
+                        {filteredSchedules
+                          .filter(s => s.days_of_week && Array.isArray(s.days_of_week) && s.days_of_week.includes(dayNum))
+                          .map(schedule => (
+                            <div key={schedule.id} className="text-xs p-1 bg-blue-50 rounded border-l-2 border-blue-400">
+                              <div className="font-medium">{getRouteName(schedule.route_id)}</div>
+                              <div className="text-gray-600">{schedule.departure_time}</div>
+                            </div>
+                          ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -529,36 +580,61 @@ const ScheduleManagement = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Day of Week</label>
-                  <select
-                    required
-                    value={scheduleForm.dayOfWeek}
-                    onChange={(e) => setScheduleForm({...scheduleForm, dayOfWeek: e.target.value})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="monday">Monday</option>
-                    <option value="tuesday">Tuesday</option>
-                    <option value="wednesday">Wednesday</option>
-                    <option value="thursday">Thursday</option>
-                    <option value="friday">Friday</option>
-                    <option value="saturday">Saturday</option>
-                    <option value="sunday">Sunday</option>
-                  </select>
-                </div>
-                <div>
                   <label className="block text-sm font-medium text-gray-700">Frequency</label>
                   <select
                     required
                     value={scheduleForm.frequency}
-                    onChange={(e) => setScheduleForm({...scheduleForm, frequency: e.target.value})}
+                    onChange={(e) => {
+                      const newFreq = e.target.value;
+                      const newDays = newFreq === 'custom' ? scheduleForm.daysOfWeek : frequencyToDays(newFreq);
+                      setScheduleForm({...scheduleForm, frequency: newFreq, daysOfWeek: newDays});
+                    }}
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   >
-                    <option value="daily">Daily</option>
-                    <option value="weekdays">Weekdays Only</option>
-                    <option value="weekends">Weekends Only</option>
-                    <option value="custom">Custom</option>
+                    <option value="daily">Daily (All Days)</option>
+                    <option value="weekdays">Weekdays Only (Mon-Fri)</option>
+                    <option value="weekends">Weekends Only (Sat-Sun)</option>
+                    <option value="custom">Custom Days</option>
                   </select>
                 </div>
+                {scheduleForm.frequency === 'custom' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Select Days</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: 1, label: 'Monday' },
+                        { value: 2, label: 'Tuesday' },
+                        { value: 3, label: 'Wednesday' },
+                        { value: 4, label: 'Thursday' },
+                        { value: 5, label: 'Friday' },
+                        { value: 6, label: 'Saturday' },
+                        { value: 7, label: 'Sunday' }
+                      ].map(day => (
+                        <label key={day.value} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={scheduleForm.daysOfWeek.includes(day.value)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setScheduleForm({
+                                  ...scheduleForm,
+                                  daysOfWeek: [...scheduleForm.daysOfWeek, day.value].sort()
+                                });
+                              } else {
+                                setScheduleForm({
+                                  ...scheduleForm,
+                                  daysOfWeek: scheduleForm.daysOfWeek.filter(d => d !== day.value)
+                                });
+                              }
+                            }}
+                            className="rounded border-gray-300 text-primary-600 shadow-sm focus:border-primary-300 focus:ring focus:ring-primary-200 focus:ring-opacity-50"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">{day.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Notes</label>
                   <textarea
@@ -668,36 +744,61 @@ const ScheduleManagement = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Day of Week</label>
-                  <select
-                    required
-                    value={scheduleForm.dayOfWeek}
-                    onChange={(e) => setScheduleForm({...scheduleForm, dayOfWeek: e.target.value})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="monday">Monday</option>
-                    <option value="tuesday">Tuesday</option>
-                    <option value="wednesday">Wednesday</option>
-                    <option value="thursday">Thursday</option>
-                    <option value="friday">Friday</option>
-                    <option value="saturday">Saturday</option>
-                    <option value="sunday">Sunday</option>
-                  </select>
-                </div>
-                <div>
                   <label className="block text-sm font-medium text-gray-700">Frequency</label>
                   <select
                     required
                     value={scheduleForm.frequency}
-                    onChange={(e) => setScheduleForm({...scheduleForm, frequency: e.target.value})}
+                    onChange={(e) => {
+                      const newFreq = e.target.value;
+                      const newDays = newFreq === 'custom' ? scheduleForm.daysOfWeek : frequencyToDays(newFreq);
+                      setScheduleForm({...scheduleForm, frequency: newFreq, daysOfWeek: newDays});
+                    }}
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   >
-                    <option value="daily">Daily</option>
-                    <option value="weekdays">Weekdays Only</option>
-                    <option value="weekends">Weekends Only</option>
-                    <option value="custom">Custom</option>
+                    <option value="daily">Daily (All Days)</option>
+                    <option value="weekdays">Weekdays Only (Mon-Fri)</option>
+                    <option value="weekends">Weekends Only (Sat-Sun)</option>
+                    <option value="custom">Custom Days</option>
                   </select>
                 </div>
+                {scheduleForm.frequency === 'custom' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Select Days</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: 1, label: 'Monday' },
+                        { value: 2, label: 'Tuesday' },
+                        { value: 3, label: 'Wednesday' },
+                        { value: 4, label: 'Thursday' },
+                        { value: 5, label: 'Friday' },
+                        { value: 6, label: 'Saturday' },
+                        { value: 7, label: 'Sunday' }
+                      ].map(day => (
+                        <label key={day.value} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={scheduleForm.daysOfWeek.includes(day.value)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setScheduleForm({
+                                  ...scheduleForm,
+                                  daysOfWeek: [...scheduleForm.daysOfWeek, day.value].sort()
+                                });
+                              } else {
+                                setScheduleForm({
+                                  ...scheduleForm,
+                                  daysOfWeek: scheduleForm.daysOfWeek.filter(d => d !== day.value)
+                                });
+                              }
+                            }}
+                            className="rounded border-gray-300 text-primary-600 shadow-sm focus:border-primary-300 focus:ring focus:ring-primary-200 focus:ring-opacity-50"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">{day.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Notes</label>
                   <textarea

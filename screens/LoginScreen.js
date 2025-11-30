@@ -14,7 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabase } from '../contexts/SupabaseContext';
 
-export default function LoginScreen() {
+// Optional prop: onSwitchToDriver lets the user choose to log in as a driver instead of passenger
+export default function LoginScreen({ onSwitchToDriver }) {
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -120,7 +121,9 @@ export default function LoginScreen() {
             <Ionicons name="bus" size={52} color="#fff" />
           </View>
           <Text style={styles.title}>Metro NaviGo</Text>
-          <Text style={styles.subtitle}>Sign in to track buses and send pings</Text>
+          <Text style={styles.subtitle}>
+            Sign in as a passenger or choose driver login
+          </Text>
         </View>
 
         <View style={styles.form}>
@@ -193,6 +196,23 @@ export default function LoginScreen() {
               </>
             )}
           </TouchableOpacity>
+
+          {onSwitchToDriver && (
+            <TouchableOpacity
+              style={[styles.button, styles.driverButton]}
+              onPress={onSwitchToDriver}
+              disabled={loading}
+            >
+              <Ionicons
+                name="car"
+                size={20}
+                color="#1F2933"
+              />
+              <Text style={styles.driverButtonText}>
+                Driver login
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[styles.button, styles.signupButton]}
@@ -312,6 +332,10 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 12,
   },
+  driverButton: {
+    backgroundColor: '#E5E7EB',
+    borderWidth: 0,
+  },
   signupButton: {
     backgroundColor: '#fff',
     borderWidth: 2,
@@ -321,6 +345,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 17,
     fontWeight: '800',
+    marginLeft: 10,
+    fontFamily: 'System',
+    letterSpacing: -0.3,
+  },
+  driverButtonText: {
+    color: '#111827',
+    fontSize: 16,
+    fontWeight: '700',
     marginLeft: 10,
     fontFamily: 'System',
     letterSpacing: -0.3,

@@ -474,8 +474,17 @@ function AppContent() {
     );
   }
 
-  if (!user) {
-    return <LoginScreen />;
+  // When no passenger user is logged in and we're in passenger mode,
+  // show the passenger login screen with an option to switch to driver login.
+  if (!user && currentRole === 'passenger') {
+    return (
+      <LoginScreen
+        onSwitchToDriver={() => {
+          setCurrentRole('driver');
+          setDriverAuthenticated(false);
+        }}
+      />
+    );
   }
 
   // If switching to driver mode but not authenticated as driver, show driver login
