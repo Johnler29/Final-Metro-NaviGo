@@ -50,6 +50,12 @@ const CapacityStatusModal = ({
   const handleUpdateCapacity = async () => {
     if (isUpdating) return;
     
+    // Validate busId before attempting update
+    if (!busId) {
+      Alert.alert('Error', 'Bus ID is missing. Please ensure you are assigned to a bus.');
+      return;
+    }
+    
     setIsUpdating(true);
     try {
       await onUpdateCapacity(busId, capacity);
@@ -57,7 +63,9 @@ const CapacityStatusModal = ({
       onClose();
     } catch (error) {
       console.error('Error updating capacity:', error);
-      Alert.alert('Error', 'Failed to update bus capacity. Please try again.');
+      // Show more specific error message if available
+      const errorMessage = error?.message || 'Failed to update bus capacity. Please try again.';
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsUpdating(false);
     }

@@ -58,6 +58,9 @@ CREATE TABLE buses (
   heading INTEGER,
   tracking_status VARCHAR(20) DEFAULT 'moving' CHECK (tracking_status IN ('moving', 'stopped', 'at_stop')),
   last_location_update TIMESTAMP WITH TIME ZONE,
+  -- Capacity tracking fields
+  capacity_percentage INTEGER DEFAULT 0 CHECK (capacity_percentage >= 0 AND capacity_percentage <= 100),
+  current_passengers INTEGER DEFAULT 0 CHECK (current_passengers >= 0),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT buses_bus_number_key UNIQUE (bus_number)

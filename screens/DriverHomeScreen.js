@@ -356,7 +356,12 @@ export default function DriverHomeScreen({ navigation }) {
 
     // Subscribe to real-time updates
     const channel = supabase
-      .channel(`ping-notifications-${currentBus.id}`)
+      .channel(`ping-notifications-${currentBus.id}`, {
+        config: {
+          broadcast: { self: false },
+          presence: { key: `ping-${currentBus.id}` }
+        }
+      })
       .on(
         'postgres_changes',
         {
@@ -367,10 +372,16 @@ export default function DriverHomeScreen({ navigation }) {
         },
         (payload) => {
           console.log('🔔 Ping notification change:', payload);
+          
+          // Check event type - Supabase uses 'event' property, not 'eventType'
+          const eventType = payload.eventType || payload.event;
+          console.log('🔔 Event type:', eventType, 'Full payload:', JSON.stringify(payload, null, 2));
+          
+          // Reload notifications for any change (INSERT, UPDATE, DELETE)
           loadPingNotifications();
           
           // Vibrate and alert on new ping
-          if (payload.eventType === 'INSERT') {
+          if (eventType === 'INSERT' || eventType === 'insert') {
             Vibration.vibrate([0, 200, 100, 200]);
             Alert.alert(
               '🔔 New Passenger Ping!',
@@ -383,10 +394,24 @@ export default function DriverHomeScreen({ navigation }) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('🔔 Ping subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to ping notifications');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Ping subscription error - check if real-time is enabled for ping_notifications table');
+        } else if (status === 'TIMED_OUT') {
+          console.error('❌ Ping subscription timed out');
+        } else if (status === 'CLOSED') {
+          console.warn('⚠️ Ping subscription closed');
+        }
+      });
 
     return () => {
-      supabase.removeChannel(channel);
+      console.log('🔄 Cleaning up ping notification subscription');
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [currentBus?.id]);
 
@@ -733,18 +758,36 @@ export default function DriverHomeScreen({ navigation }) {
   };
 
   const handleCapacityUpdate = async (busId, capacityPercentage) => {
+    // Validate inputs
+    if (!busId) {
+      throw new Error('Bus ID is required. Please ensure you are assigned to a bus.');
+    }
+    
+    if (capacityPercentage < 0 || capacityPercentage > 100) {
+      throw new Error('Capacity percentage must be between 0 and 100');
+    }
+
     try {
-      await updateBusCapacityStatus(busId, capacityPercentage);
-      setCurrentCapacity(capacityPercentage);
-      // Update the bus in the local state
-      const updatedBus = buses.find(bus => bus.id === busId);
-      if (updatedBus) {
-        updatedBus.capacity_percentage = capacityPercentage;
-        updatedBus.current_passengers = Math.round((capacityPercentage / 100) * 50);
+      console.log('🔄 Updating capacity for bus:', busId, 'to', capacityPercentage + '%');
+      const result = await updateBusCapacityStatus(busId, capacityPercentage);
+      
+      if (result) {
+        setCurrentCapacity(capacityPercentage);
+        // Update the bus in the local state
+        const updatedBus = buses.find(bus => bus.id === busId);
+        if (updatedBus) {
+          updatedBus.capacity_percentage = capacityPercentage;
+          // Get max capacity from result (supports both 'capacity' and 'max_capacity' for compatibility)
+          const maxCapacity = result.max_capacity || result.capacity || updatedBus.max_capacity || updatedBus.capacity || 50;
+          updatedBus.current_passengers = Math.round((capacityPercentage / 100) * maxCapacity);
+        }
+        console.log('✅ Capacity updated successfully');
       }
     } catch (error) {
-      console.error('Error updating capacity:', error);
-      throw error;
+      console.error('❌ Error updating capacity:', error);
+      // Re-throw with better error message
+      const errorMessage = error?.message || 'Failed to update bus capacity. Please try again.';
+      throw new Error(errorMessage);
     }
   };
 

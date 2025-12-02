@@ -125,82 +125,76 @@ export default function MapScreen({ navigation, route }) {
   const loadBuses = async () => {
     try {
       // Transform database buses to map format - only show buses with active drivers/trips
-      const transformedBuses = buses.map(bus => {
-        const route = routes.find(r => r.id === bus.route_id);
+      // IMPORTANT: Preserve existing coordinates to prevent snapping back to user location
+      setMapBuses(prevMapBuses => {
+        const prevMap = new Map(prevMapBuses.map(b => [b.id, b]));
         
-        // Show buses that have active drivers (relaxed criteria for testing)
-        const hasActiveDriver = bus.driver_id && bus.status === 'active';
-        const hasRecentLocation = bus.last_location_update && 
-          new Date(bus.last_location_update) > new Date(Date.now() - 10 * 60 * 1000); // Within last 10 minutes (relaxed)
-        const hasValidCoordinates = bus.latitude && bus.longitude && 
-          !isNaN(bus.latitude) && !isNaN(bus.longitude);
-        
-        // Check if driver just went on duty (bus was recently updated - within last 5 minutes)
-        // This allows buses to appear immediately when driver goes on duty, even without coordinates yet
-        // Extended to 5 minutes to allow more time for GPS to acquire location
-        const justWentOnDuty = bus.updated_at && 
-          new Date(bus.updated_at) > new Date(Date.now() - 5 * 60 * 1000);
-        
-        // Show bus if driver is active AND (has valid coordinates OR just went on duty)
-        // This allows buses to appear immediately when driver goes on duty, even before first location update
-        if (!hasActiveDriver) {
-          return null;
-        }
-        
-        // Get coordinates directly from the buses table
-        let lat = bus.latitude;
-        let lng = bus.longitude;
-        
-        // If driver just went on duty but coordinates aren't available yet, use placeholder
-        // Real coordinates will be updated once GPS location arrives via real-time subscription
-        if ((!lat || !lng || isNaN(lat) || isNaN(lng)) && justWentOnDuty) {
-          // Use placeholder coordinates (will update when GPS location arrives)
-          if (location?.coords) {
-            lat = location.coords.latitude;
-            lng = location.coords.longitude;
-          } else {
-            // Fallback to a default location if user location not available
-            lat = 14.4791; // Default to a central location
-            lng = 120.8969;
-          }
-        } else if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
-          // IMPORTANT FIX: For buses with active drivers but no coordinates yet,
-          // still show them with placeholder coordinates rather than hiding them
-          // This ensures buses appear even if GPS is slow to acquire location
-          if (hasActiveDriver) {
-            // Use placeholder coordinates so bus appears on map
-            if (location?.coords) {
-              lat = location.coords.latitude;
-              lng = location.coords.longitude;
-            } else {
-              lat = 14.4791;
-              lng = 120.8969;
-            }
-          } else {
-            // Only hide buses that don't have active drivers
+        const transformedBuses = buses.map(bus => {
+          const route = routes.find(r => r.id === bus.route_id);
+          
+          // Show buses that have active drivers (relaxed criteria for testing)
+          const hasActiveDriver = bus.driver_id && bus.status === 'active';
+          const hasRecentLocation = bus.last_location_update && 
+            new Date(bus.last_location_update) > new Date(Date.now() - 10 * 60 * 1000); // Within last 10 minutes (relaxed)
+          const hasValidCoordinates = bus.latitude && bus.longitude && 
+            !isNaN(bus.latitude) && !isNaN(bus.longitude);
+          
+          // Check if driver just went on duty (bus was recently updated - within last 5 minutes)
+          // This allows buses to appear immediately when driver goes on duty, even without coordinates yet
+          // Extended to 5 minutes to allow more time for GPS to acquire location
+          const justWentOnDuty = bus.updated_at && 
+            new Date(bus.updated_at) > new Date(Date.now() - 5 * 60 * 1000);
+          
+          // Show bus if driver is active AND (has valid coordinates OR just went on duty)
+          // This allows buses to appear immediately when driver goes on duty, even before first location update
+          if (!hasActiveDriver) {
             return null;
           }
-        }
+          
+          // Get coordinates directly from the buses table
+          let lat = bus.latitude;
+          let lng = bus.longitude;
+          
+          // CRITICAL FIX: If new data has no coordinates, preserve existing coordinates from previous state
+          // This prevents buses from snapping back to user location or placeholder
+          if (!hasValidCoordinates) {
+            const prevBus = prevMap.get(bus.id);
+            if (prevBus && typeof prevBus.latitude === 'number' && typeof prevBus.longitude === 'number') {
+              // Keep the previous coordinates - don't overwrite with user location
+              lat = prevBus.latitude;
+              lng = prevBus.longitude;
+            } else if (justWentOnDuty) {
+              // Only use placeholder for brand new buses that just went on duty
+              // Use a default location instead of user location to avoid confusion
+              lat = 14.4791; // Default to a central location
+              lng = 120.8969;
+            } else {
+              // Bus doesn't have coordinates and hasn't just gone on duty - don't show it
+              return null;
+            }
+          }
+          
+          const transformedBus = {
+            id: bus.id, // Use id from the buses table
+            route_number: route ? route.route_number : 'Unknown',
+            direction: route ? `${route.origin} to ${route.destination}` : 'Unknown',
+            latitude: lat,
+            longitude: lng,
+            status: bus.tracking_status || bus.status || 'active',
+            capacity_percentage: bus.capacity_percentage || 0,
+            current_passengers: bus.current_passengers || 0,
+            max_capacity: bus.max_capacity || 50,
+            last_location_update: bus.updated_at || new Date().toISOString(),
+          };
+          return transformedBus;
+        }).filter(b => {
+          if (!b) return false; // Filter out null buses (inactive drivers)
+          const isValid = typeof b.latitude === 'number' && typeof b.longitude === 'number';
+          return isValid;
+        });
         
-        const transformedBus = {
-          id: bus.id, // Use id from the buses table
-          route_number: route ? route.route_number : 'Unknown',
-          direction: route ? `${route.origin} to ${route.destination}` : 'Unknown',
-          latitude: lat,
-          longitude: lng,
-          status: bus.tracking_status || bus.status || 'active',
-          capacity_percentage: bus.capacity_percentage || 0,
-          current_passengers: bus.current_passengers || 0,
-          max_capacity: bus.max_capacity || 50,
-          last_location_update: bus.updated_at || new Date().toISOString(),
-        };
-        return transformedBus;
-      }).filter(b => {
-        if (!b) return false; // Filter out null buses (inactive drivers)
-        const isValid = typeof b.latitude === 'number' && typeof b.longitude === 'number';
-        return isValid;
+        return transformedBuses;
       });
-      setMapBuses(transformedBuses);
     } catch (error) {
       console.error('Error loading buses:', error);
       setMapBuses([]);

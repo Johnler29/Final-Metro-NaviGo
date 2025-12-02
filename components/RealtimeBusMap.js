@@ -161,6 +161,9 @@ const RealtimeBusMap = ({
   const selectedBusRef = useRef(null);
   const isUserInteractingRef = useRef(false);
   const lastUserInteractionTime = useRef(0);
+  // Track current map region to preserve zoom level
+  const currentRegionRef = useRef(null);
+  const isZoomingRef = useRef(false);
 
   const getGoogleMapsApiKey = () => {
     return (
@@ -250,20 +253,25 @@ const RealtimeBusMap = ({
               return null;
             }
 
-            // Start with database coordinates
-            let lat = hasValidCoordinates ? bus.latitude : null;
-            let lng = hasValidCoordinates ? bus.longitude : null;
+            // CRITICAL: Always check previous state first to preserve real-time coordinates
+            // Real-time updates may arrive faster than context updates, so preserve the most recent coordinates
+            const prev = prevMap.get(bus.id);
+            let lat = null;
+            let lng = null;
 
-            // If new data has no coordinates, keep the last known ones (avoid snapping back)
-            if (!hasValidCoordinates) {
-              const prev = prevMap.get(bus.id);
-              if (prev && typeof prev.latitude === 'number' && typeof prev.longitude === 'number') {
-                lat = prev.latitude;
-                lng = prev.longitude;
-              } else {
-                // No previous coordinates to fall back to – don't show this bus yet
-                return null;
-              }
+            // Priority 1: Use new valid coordinates from context if available
+            if (hasValidCoordinates) {
+              lat = bus.latitude;
+              lng = bus.longitude;
+            }
+            // Priority 2: If no new coordinates, preserve previous coordinates (from real-time updates)
+            else if (prev && typeof prev.latitude === 'number' && typeof prev.longitude === 'number') {
+              lat = prev.latitude;
+              lng = prev.longitude;
+            }
+            // Priority 3: No coordinates available - don't show this bus
+            else {
+              return null;
             }
 
             const transformedBus = {
@@ -796,11 +804,16 @@ const RealtimeBusMap = ({
       setFollowUserLocation(false); // Stop following user when bus is selected
       const selectedBus = buses.find(bus => bus.bus_id === selectedBusId);
       if (selectedBus) {
+        // Preserve current zoom level when focusing on bus
+        const currentRegion = currentRegionRef.current;
+        const latitudeDelta = currentRegion?.latitudeDelta || 0.01;
+        const longitudeDelta = currentRegion?.longitudeDelta || 0.01;
+        
         const region = {
           latitude: selectedBus.latitude,
           longitude: selectedBus.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
+          latitudeDelta: latitudeDelta,
+          longitudeDelta: longitudeDelta,
         };
         try {
           mapRef.current.animateToRegion(region, 1000);
@@ -818,6 +831,11 @@ const RealtimeBusMap = ({
   // Follow selected bus as it moves (if a bus is selected)
   useEffect(() => {
     if (selectedBusId && buses.length > 0 && mapRef.current && !followUserLocation) {
+      // Don't auto-follow if user is zooming or interacting
+      if (isUserInteractingRef.current || isZoomingRef.current) {
+        return;
+      }
+
       const selectedBus = buses.find(bus => bus.bus_id === selectedBusId);
       if (selectedBus && selectedBus.latitude && selectedBus.longitude) {
         // Only animate if coordinates actually changed (avoid unnecessary animations)
@@ -832,11 +850,16 @@ const RealtimeBusMap = ({
             longitude: selectedBus.longitude
           };
           
+          // Preserve current zoom level when following bus
+          const currentRegion = currentRegionRef.current;
+          const latitudeDelta = currentRegion?.latitudeDelta || 0.01;
+          const longitudeDelta = currentRegion?.longitudeDelta || 0.01;
+          
           const region = {
             latitude: selectedBus.latitude,
             longitude: selectedBus.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
+            latitudeDelta: latitudeDelta,
+            longitudeDelta: longitudeDelta,
           };
           try {
             mapRef.current.animateToRegion(region, 1000);
@@ -856,17 +879,22 @@ const RealtimeBusMap = ({
       return;
     }
 
-    // Don't follow if user recently interacted with the map (within last 2 seconds)
+    // Don't follow if user recently interacted with the map (within last 5 seconds)
     const timeSinceInteraction = Date.now() - lastUserInteractionTime.current;
-    if (isUserInteractingRef.current || timeSinceInteraction < 2000) {
+    if (isUserInteractingRef.current || isZoomingRef.current || timeSinceInteraction < 5000) {
       return;
     }
+
+    // Preserve current zoom level (delta values) when following user location
+    const currentRegion = currentRegionRef.current;
+    const latitudeDelta = currentRegion?.latitudeDelta || 0.01;
+    const longitudeDelta = currentRegion?.longitudeDelta || 0.01;
 
     const region = {
       latitude: userLocation.latitude,
       longitude: userLocation.longitude,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
+      latitudeDelta: latitudeDelta,
+      longitudeDelta: longitudeDelta,
     };
 
     try {
@@ -901,10 +929,12 @@ const RealtimeBusMap = ({
   }, [setupRealtimeSubscription, supabase]);
 
   // Load routes and buses when dependencies change
+  // Only reload when contextBuses or routes actually change, not when callbacks are recreated
   useEffect(() => {
     loadRoutes();
     loadBuses();
-  }, [loadRoutes, loadBuses]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextBuses, routes]);
 
   // Start pulse animation only once on mount
   useEffect(() => {
@@ -928,6 +958,8 @@ const RealtimeBusMap = ({
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       };
+      // Save initial region
+      currentRegionRef.current = region;
       if (mapRef.current) {
         setTimeout(() => {
           try {
@@ -940,11 +972,13 @@ const RealtimeBusMap = ({
     }
   }, []);
 
-  // Refresh buses every 30 seconds as fallback
-  useEffect(() => {
-    const interval = setInterval(loadBuses, 30000);
-    return () => clearInterval(interval);
-  }, [loadBuses]);
+  // REMOVED: Auto-refresh interval - real-time subscriptions handle updates
+  // The 30-second refresh was causing buses to snap back to user location
+  // Real-time subscriptions from Supabase provide immediate updates without polling
+  // useEffect(() => {
+  //   const interval = setInterval(loadBuses, 30000);
+  //   return () => clearInterval(interval);
+  // }, [loadBuses]);
 
   // Auto-hide loading after 2 seconds as safety fallback
   useEffect(() => {
@@ -1028,15 +1062,26 @@ const RealtimeBusMap = ({
           }
           
           if (followUserLocation && !selectedBusId && event.nativeEvent.coordinate) {
+            // Don't auto-follow if user is zooming or interacting
+            if (isUserInteractingRef.current || isZoomingRef.current) {
+              return;
+            }
+
             const newLocation = {
               latitude: event.nativeEvent.coordinate.latitude,
               longitude: event.nativeEvent.coordinate.longitude,
             };
-            // Update map region to follow user
+            
+            // Preserve current zoom level when following user location
+            const currentRegion = currentRegionRef.current;
+            const latitudeDelta = currentRegion?.latitudeDelta || 0.01;
+            const longitudeDelta = currentRegion?.longitudeDelta || 0.01;
+            
+            // Update map region to follow user (preserving zoom)
             const region = {
               ...newLocation,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
+              latitudeDelta: latitudeDelta,
+              longitudeDelta: longitudeDelta,
             };
             if (mapRef.current) {
               try {
@@ -1054,17 +1099,35 @@ const RealtimeBusMap = ({
           setFollowUserLocation(false);
           // Performance: Removed console.log
         }}
+        onPress={() => {
+          // User tapped on map - mark as interacting
+          isUserInteractingRef.current = true;
+          lastUserInteractionTime.current = Date.now();
+        }}
+        onRegionChange={(region) => {
+          // Track current region to preserve zoom level
+          currentRegionRef.current = region;
+          // Detect if user is zooming (delta values are changing)
+          if (isUserInteractingRef.current) {
+            isZoomingRef.current = true;
+          }
+        }}
         onRegionChangeComplete={(region) => {
-          // User finished moving the map
+          // Save the current region (including zoom level)
+          currentRegionRef.current = region;
+          
+          // User finished moving/zooming the map
           const timeSinceInteraction = Date.now() - lastUserInteractionTime.current;
           if (timeSinceInteraction < 100) {
             // This was likely a user interaction, not programmatic
             isUserInteractingRef.current = false;
+            isZoomingRef.current = false;
             // Keep followUserLocation disabled - user manually moved the map
             // Performance: Removed console.log
           } else {
-            // This was likely programmatic, reset the flag
+            // This was likely programmatic, reset the flags
             isUserInteractingRef.current = false;
+            isZoomingRef.current = false;
           }
         }}
         onError={(error) => {
@@ -1134,11 +1197,16 @@ const RealtimeBusMap = ({
             isUserInteractingRef.current = false;
             lastUserInteractionTime.current = 0;
             if (mapRef.current && userLocation) {
+              // Preserve current zoom level when re-enabling follow
+              const currentRegion = currentRegionRef.current;
+              const latitudeDelta = currentRegion?.latitudeDelta || 0.01;
+              const longitudeDelta = currentRegion?.longitudeDelta || 0.01;
+              
               const region = {
                 latitude: userLocation.latitude,
                 longitude: userLocation.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
+                latitudeDelta: latitudeDelta,
+                longitudeDelta: longitudeDelta,
               };
               try {
                 mapRef.current.animateToRegion(region, 1000);
