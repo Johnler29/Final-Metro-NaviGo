@@ -129,6 +129,19 @@ export default function MapScreen({ navigation, route }) {
       setMapBuses(prevMapBuses => {
         const prevMap = new Map(prevMapBuses.map(b => [b.id, b]));
         
+        // CRITICAL: Also remove buses from prevMapBuses that are no longer in the buses array
+        // This ensures buses disappear immediately when drivers go off duty
+        const activeBusIds = new Set(buses.map(b => b.id));
+        const busesToKeep = prevMapBuses.filter(bus => {
+          // Keep bus if it's in the new active buses list
+          if (activeBusIds.has(bus.id)) {
+            return true;
+          }
+          // Remove bus if it's no longer in the context buses (driver went off duty)
+          console.log('🚫 Removing bus from MapScreen - no longer in context (driver off duty):', bus.id);
+          return false;
+        });
+        
         const transformedBuses = buses.map(bus => {
           const route = routes.find(r => r.id === bus.route_id);
           
@@ -193,7 +206,12 @@ export default function MapScreen({ navigation, route }) {
           return isValid;
         });
         
-        return transformedBuses;
+        // Merge: keep existing buses that are still valid, add new ones from context
+        const mergedMap = new Map();
+        busesToKeep.forEach(bus => mergedMap.set(bus.id, bus));
+        transformedBuses.forEach(bus => mergedMap.set(bus.id, bus));
+        
+        return Array.from(mergedMap.values());
       });
     } catch (error) {
       console.error('Error loading buses:', error);

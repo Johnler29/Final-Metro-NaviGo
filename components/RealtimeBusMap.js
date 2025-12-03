@@ -237,7 +237,9 @@ const RealtimeBusMap = ({
 
       setBuses(prevBuses => {
         const prevMap = new Map(prevBuses.map(b => [b.bus_id, b]));
+        const contextBusIds = new Set(contextBuses.map(b => b.id));
 
+        // First, create a map of valid buses from context
         nextBuses = contextBuses
           .map(bus => {
             const route = routes?.find(r => r.id === bus.route_id);
@@ -249,6 +251,7 @@ const RealtimeBusMap = ({
               !isNaN(bus.latitude) &&
               !isNaN(bus.longitude);
 
+            // CRITICAL: Remove buses without active drivers
             if (!hasActiveDriver) {
               return null;
             }
@@ -310,7 +313,37 @@ const RealtimeBusMap = ({
             return isValid;
           });
 
-        return nextBuses;
+        // CRITICAL FIX: Also remove buses from prevBuses that are no longer in contextBuses
+        // or no longer have active drivers. This ensures buses disappear when drivers go off duty.
+        const validBusIds = new Set(nextBuses.map(b => b.bus_id));
+        const busesToKeep = prevBuses.filter(bus => {
+          // Keep bus if it's in the new valid buses list
+          if (validBusIds.has(bus.bus_id)) {
+            return true;
+          }
+          // Remove bus if it's not in contextBuses at all (driver went off duty)
+          if (!contextBusIds.has(bus.bus_id)) {
+            console.log('🚫 Removing bus from map - no longer in context (driver off duty):', bus.bus_id);
+            return false;
+          }
+          // Check if bus in contextBuses has no active driver
+          const contextBus = contextBuses.find(b => b.id === bus.bus_id);
+          if (contextBus) {
+            const hasActiveDriver = contextBus.driver_id && contextBus.status === 'active';
+            if (!hasActiveDriver) {
+              console.log('🚫 Removing bus from map - no active driver:', bus.bus_id);
+              return false;
+            }
+          }
+          return false; // Default: remove if not explicitly kept
+        });
+
+        // Merge: keep existing buses that are still valid, add new ones from context
+        const mergedMap = new Map();
+        busesToKeep.forEach(bus => mergedMap.set(bus.bus_id, bus));
+        nextBuses.forEach(bus => mergedMap.set(bus.bus_id, bus));
+
+        return Array.from(mergedMap.values());
       });
 
       setLastUpdate(new Date());
@@ -427,10 +460,10 @@ const RealtimeBusMap = ({
             // Single subscription for all bus updates (throttled to prevent freezing)
           },
           (payload) => {
-            // Only handle if it's a location update (latitude/longitude changed)
-            if (payload.new.latitude != null && payload.new.longitude != null) {
-              handleBusUpdateThrottled(payload);
-            }
+            // Process ALL bus updates, not just location updates
+            // This ensures driver status changes (going off duty) are handled immediately
+            // The processBusUpdate function will check for driver status and remove buses accordingly
+            handleBusUpdateThrottled(payload);
           }
         )
         .on('postgres_changes',
@@ -494,14 +527,63 @@ const RealtimeBusMap = ({
                               updatedBus.status === 'active';
       
       // If driver went off duty, remove bus from map (immediate, no throttling)
+      // This handles updates where only driver_id or status changed (no coordinates)
       if (!hasActiveDriver) {
-        setBuses(prevBuses => prevBuses.filter(bus => bus.bus_id !== busId));
+        console.log('🚫 Removing bus from map - driver went off duty:', {
+          busId,
+          driver_id: updatedBus.driver_id,
+          status: updatedBus.status
+        });
+        setBuses(prevBuses => {
+          const filtered = prevBuses.filter(bus => bus.bus_id !== busId);
+          if (filtered.length !== prevBuses.length) {
+            console.log('✅ Bus removed successfully. Remaining buses:', filtered.length);
+          }
+          return filtered;
+        });
         return;
       }
 
-      // If we don't have valid coordinates in this update, keep the previous
-      // position instead of snapping the marker back to a placeholder.
+      // If we don't have valid coordinates in this update, but driver is still active,
+      // keep the previous position instead of snapping the marker back to a placeholder.
+      // However, we should still update the bus status/metadata if provided.
+      // CRITICAL: Double-check active driver status - if driver went off duty, remove bus immediately
       if (!hasValidCoordinates) {
+        // CRITICAL: If driver is no longer active, remove bus (don't update metadata)
+        if (!hasActiveDriver) {
+          console.log('🚫 Removing bus from map - no active driver (no coordinates update):', busId);
+          setBuses(prevBuses => {
+            const filtered = prevBuses.filter(bus => bus.bus_id !== busId);
+            if (filtered.length !== prevBuses.length) {
+              console.log('✅ Bus removed successfully. Remaining buses:', filtered.length);
+            }
+            return filtered;
+          });
+          return;
+        }
+        
+        // Update bus metadata even without coordinates (status, capacity, etc.)
+        // Only update if driver is still active
+        setBuses(prevBuses => {
+          const existingBus = prevBuses.find(bus => bus.bus_id === busId);
+          if (existingBus) {
+            return prevBuses.map(bus => {
+              if (bus.bus_id === busId) {
+                return {
+                  ...bus,
+                  tracking_status: updatedBus.tracking_status || bus.tracking_status,
+                  current_passengers: updatedBus.current_passengers ?? bus.current_passengers,
+                  capacity_percentage: updatedBus.capacity_percentage ?? bus.capacity_percentage,
+                  capacity_status: (updatedBus.capacity_percentage ?? bus.capacity_percentage ?? 0) >= 90 ? 'full' : 
+                                  (updatedBus.capacity_percentage ?? bus.capacity_percentage ?? 0) >= 70 ? 'crowded' : 
+                                  (updatedBus.capacity_percentage ?? bus.capacity_percentage ?? 0) >= 40 ? 'moderate' : 'light',
+                };
+              }
+              return bus;
+            });
+          }
+          return prevBuses;
+        });
         return;
       }
       
@@ -522,6 +604,12 @@ const RealtimeBusMap = ({
         
         const updatedBuses = prevBuses.map(bus => {
           if (bus.bus_id === busId) {
+            // CRITICAL: Double-check active driver status during merge
+            // If driver went off duty, don't update the bus (it will be filtered out)
+            if (!hasActiveDriver) {
+              return null; // Mark for removal
+            }
+            
             const newTrackingStatus = updatedBus.tracking_status || bus.tracking_status || 'moving';
             const newCapacityPercentage = updatedBus.capacity_percentage ?? bus.capacity_percentage ?? 0;
             
@@ -541,7 +629,7 @@ const RealtimeBusMap = ({
             };
           }
           return bus;
-        });
+        }).filter(bus => bus !== null); // Remove buses marked for removal
         
         // If bus not in current list, add it if it has active driver AND valid coordinates
         if (!prevBuses.find(bus => bus.bus_id === busId) && hasActiveDriver && hasValidCoordinates) {
@@ -568,13 +656,23 @@ const RealtimeBusMap = ({
           updatedBuses.push(newBus);
         }
         
-        // Filter out any buses with invalid coordinates
+        // CRITICAL: Filter out buses with invalid coordinates AND buses without active drivers
         return updatedBuses.filter(bus => {
+          if (!bus) return false;
+          
           const hasValidCoords = bus.latitude != null && 
             bus.longitude != null && 
             !isNaN(bus.latitude) && 
             !isNaN(bus.longitude);
-          return hasValidCoords; // Placeholder coordinates are valid numbers, so this should pass
+          
+          // Remove buses without valid coordinates
+          if (!hasValidCoords) {
+            return false;
+          }
+          
+          // Note: We can't check driver status here because the bus object doesn't have driver_id/status
+          // The check is done above in the merge logic
+          return true;
         });
       });
       

@@ -1,5 +1,5 @@
 // import 'react-native-reanimated'; // Removed - not needed
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -17,6 +17,7 @@ import MapScreen from './screens/MapScreen';
 import BusListScreen from './screens/BusListScreen';
 import RouteScreen from './screens/RouteScreen';
 import LoginScreen from './screens/LoginScreen';
+import ResetPasswordScreen from './screens/ResetPasswordScreen';
 
 // Import driver screens
 import DriverLoginScreen from './screens/DriverLoginScreen';
@@ -441,10 +442,11 @@ function DriverAuthWrapper({ navigation }) {
 
 // Main App Component with Authentication
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, showResetPassword, setShowResetPassword } = useAuth();
   const { drawerVisible, closeDrawer } = useDrawer();
   const [currentRole, setCurrentRole] = useState('passenger');
   const [driverAuthenticated, setDriverAuthenticated] = useState(false);
+  const navigationRef = React.useRef(null);
 
   const handleRoleChange = (newRole) => {
     setCurrentRole(newRole);
@@ -471,6 +473,27 @@ function AppContent() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4CAF50" />
       </View>
+    );
+  }
+
+  // Handle password reset screen - show it if user clicked reset link
+  // This happens when user clicks reset link in email, then opens the app
+  if (showResetPassword && currentRole === 'passenger') {
+    return (
+      <NavigationContainer ref={navigationRef}>
+        <ResetPasswordScreen 
+          navigation={{
+            navigate: (screen) => {
+              if (screen === 'Login') {
+                setShowResetPassword(false);
+              }
+            },
+            goBack: () => {
+              setShowResetPassword(false);
+            }
+          }}
+        />
+      </NavigationContainer>
     );
   }
 
@@ -526,6 +549,7 @@ function AppContent() {
               <Stack.Screen name="PassengerTabs" component={PassengerTabNavigator} />
               <Stack.Screen name="Settings" component={SettingsScreen} />
               <Stack.Screen name="Help" component={HelpScreen} />
+              <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
             </Stack.Navigator>
           ) : (
             <DriverTabNavigator />

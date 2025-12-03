@@ -74,7 +74,8 @@ const DriverManagement = () => {
       
       const assignmentData = {
         driver_id: assignmentForm.driver_id,
-        bus_id: assignmentForm.bus_id
+        bus_id: assignmentForm.bus_id,
+        is_active: true // Explicitly set to true so mobile app can find it
       };
       
       // Only add assigned_by if we have a valid user

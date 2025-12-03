@@ -21,7 +21,6 @@ import * as Location from 'expo-location';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { useDrawer } from '../contexts/DrawerContext';
 import CapacityStatusModal from '../components/CapacityStatusModal';
-import AlarmModal from '../components/AlarmModal';
 import { supabase } from '../lib/supabase';
 import { Vibration } from 'react-native';
 import {
@@ -48,12 +47,10 @@ export default function DriverHomeScreen({ navigation }) {
   const [passengerCount, setPassengerCount] = useState(0);
   const [tripStartTime, setTripStartTime] = useState(null);
   const [currentLocation, setCurrentLocation] = useState(null);
-  const [showPassengerModal, setShowPassengerModal] = useState(false);
   const [showCapacityModal, setShowCapacityModal] = useState(false);
   const [currentCapacity, setCurrentCapacity] = useState(0);
   const [currentBus, setCurrentBus] = useState(null);
   const [currentDriver, setCurrentDriver] = useState(null);
-  const [showAlarmModal, setShowAlarmModal] = useState(false);
   const [pingNotifications, setPingNotifications] = useState([]);
   const [showPingModal, setShowPingModal] = useState(false);
   const [unreadPingCount, setUnreadPingCount] = useState(0);
@@ -75,8 +72,6 @@ export default function DriverHomeScreen({ navigation }) {
     startTrip,
     endTrip,
     updatePassengerCount,
-    reportEmergency,
-    reportMaintenanceIssue,
     updateBusCapacityStatus,
     getBusCapacityStatus,
     startDriverSession,
@@ -109,31 +104,178 @@ export default function DriverHomeScreen({ navigation }) {
             console.log('✅ Current driver loaded:', driver.name, driver.id);
             
             // Find assigned bus for this driver using driver-bus assignments
-            console.log('🔍 Available assignments:', driverBusAssignments.length);
-            const assignment = driverBusAssignments.find(assignment => assignment.drivers?.id === driver.id);
+            console.log('🔍 Loading bus assignment for driver:', driver.id, driver.name);
+            console.log('📋 Available assignments:', driverBusAssignments.length);
+            if (driverBusAssignments.length > 0) {
+              console.log('📋 Sample assignment structure:', JSON.stringify(driverBusAssignments[0], null, 2));
+            }
+            
+            // Try multiple ways to find the assignment
+            // Log all assignments for debugging
+            console.log('📋 All assignments:', driverBusAssignments.map(a => ({
+              id: a.id,
+              driver_id: a.driver_id,
+              drivers_id: a.drivers?.id,
+              bus_id: a.bus_id,
+              has_buses: !!a.buses,
+              bus_name: a.buses?.name || a.buses?.bus_number
+            })));
+            
+            const assignment = driverBusAssignments.find(assignment => {
+              // CRITICAL: Only find active assignments
+              if (assignment.is_active !== true) {
+                return false;
+              }
+              
+              // Try multiple matching strategies
+              const match1 = assignment.drivers?.id === driver.id;
+              const match2 = assignment.driver_id === driver.id;
+              const match3 = assignment.driver_id?.toString() === driver.id?.toString();
+              const match4 = assignment.drivers?.id?.toString() === driver.id?.toString();
+              
+              const matches = match1 || match2 || match3 || match4;
+              
+              if (matches) {
+                console.log('✅ Found matching assignment:', {
+                  assignment_id: assignment.id,
+                  driver_id_from_assignment: assignment.driver_id,
+                  driver_id_from_joined: assignment.drivers?.id,
+                  driver_id_looking_for: driver.id,
+                  is_active: assignment.is_active,
+                  match1, match2, match3, match4,
+                  has_bus_data: !!assignment.buses,
+                  bus_id: assignment.bus_id,
+                  bus_name: assignment.buses?.name || assignment.buses?.bus_number
+                });
+              }
+              
+              return matches;
+            });
             
             if (assignment) {
               console.log('✅ Assignment found:', assignment);
               // Use the bus data from the assignment (which includes nested route info)
               if (assignment.buses) {
                 setCurrentBus(assignment.buses);
-                console.log('✅ Assigned bus found:', assignment.buses.bus_number, assignment.buses.id);
-              } else {
-                console.log('❌ Bus data not found in assignment');
-                // Try to find any available bus as fallback
-                const availableBus = buses.find(bus => bus.status === 'in_service' && bus.tracking_status === 'active');
-                if (availableBus) {
-                  setCurrentBus(availableBus);
-                  console.log('🔄 Using fallback bus:', availableBus.bus_number);
+                console.log('✅ Assigned bus found from assignment:', assignment.buses.bus_number || assignment.buses.name, assignment.buses.id);
+              } else if (assignment.bus_id) {
+                // Fallback: Find bus by bus_id from assignment
+                console.log('⚠️ Assignment exists but bus data missing. Looking up bus by bus_id:', assignment.bus_id);
+                const foundBus = buses.find(bus => bus.id === assignment.bus_id);
+                if (foundBus) {
+                  setCurrentBus(foundBus);
+                  console.log('✅ Found bus by assignment bus_id:', foundBus.bus_number || foundBus.name);
+                } else {
+                  console.log('❌ Bus not found in buses array (array is empty or bus not loaded). Querying directly...');
+                  // FIX: Query bus directly from database if not in array
+                  try {
+                    // Use .maybeSingle() which handles 0 or 1 rows gracefully
+                    const { data: busData, error: busError } = await supabase
+                      .from('buses')
+                      .select('*')
+                      .eq('id', assignment.bus_id)
+                      .maybeSingle();
+                    
+                    if (!busError && busData) {
+                      setCurrentBus(busData);
+                      console.log('✅ Found bus via direct query:', busData.bus_number || busData.name);
+                    } else {
+                      // Either error or no data - try fallback query through assignment join
+                      console.log('❌ Bus query failed:', busError?.message || 'No rows returned');
+                      
+                      // Try alternative: query through assignment join (this should work since assignments load successfully)
+                      try {
+                        console.log('🔄 Trying fallback query through assignment join...');
+                        const { data: altBusData, error: altError } = await supabase
+                          .from('driver_bus_assignments')
+                          .select(`
+                            buses:bus_id(*)
+                          `)
+                          .eq('id', assignment.id)
+                          .maybeSingle();
+                        
+                        if (!altError && altBusData?.buses) {
+                          setCurrentBus(altBusData.buses);
+                          console.log('✅ Found bus via assignment join:', altBusData.buses.bus_number || altBusData.buses.name);
+                        } else {
+                          console.log('❌ Fallback query also failed:', altError?.message);
+                        }
+                      } catch (altError) {
+                        console.error('❌ Alternative query also failed:', altError);
+                      }
+                    }
+                  } catch (queryError) {
+                    console.error('❌ Error querying bus:', queryError);
+                  }
                 }
+              } else {
+                console.log('❌ Assignment found but no bus_id or bus data');
               }
             } else {
-              console.log('❌ No bus assignment found for driver:', driver.id);
-              // Try to find any available bus as fallback
-              const availableBus = buses.find(bus => bus.status === 'in_service' && bus.tracking_status === 'active');
-              if (availableBus) {
-                setCurrentBus(availableBus);
-                console.log('🔄 Using fallback bus:', availableBus.bus_number);
+              console.log('❌ No assignment found in loaded data. Trying direct database query...');
+              console.log('📋 All assignment driver IDs:', driverBusAssignments.map(a => ({
+                assignment_id: a.id,
+                driver_id: a.driver_id,
+                drivers_id: a.drivers?.id,
+                bus_id: a.bus_id
+              })));
+              
+              // Fallback 1: Query database directly for assignment
+              try {
+                const { data: directAssignment, error: assignmentError } = await supabase
+                  .from('driver_bus_assignments')
+                  .select(`
+                    id,
+                    driver_id,
+                    bus_id,
+                    is_active,
+                    buses:bus_id(
+                      bus_number,
+                      name,
+                      route_id,
+                      id,
+                      status,
+                      routes:route_id(id, route_number, name)
+                    )
+                  `)
+                  .eq('driver_id', driver.id)
+                  .eq('is_active', true)
+                  .order('assigned_at', { ascending: false })
+                  .limit(1)
+                  .single();
+                
+                if (!assignmentError && directAssignment) {
+                  console.log('✅ Found assignment via direct query:', directAssignment);
+                  if (directAssignment.buses) {
+                    setCurrentBus(directAssignment.buses);
+                    console.log('✅ Assigned bus found via direct query:', directAssignment.buses.bus_number || directAssignment.buses.name);
+                  } else if (directAssignment.bus_id) {
+                    const foundBus = buses.find(bus => bus.id === directAssignment.bus_id);
+                    if (foundBus) {
+                      setCurrentBus(foundBus);
+                      console.log('✅ Found bus by direct query bus_id:', foundBus.bus_number || foundBus.name);
+                    }
+                  }
+                } else {
+                  console.log('⚠️ Direct query also found no assignment:', assignmentError?.message);
+                  
+                  // Fallback 2: Check buses table directly (in case assignment exists but query didn't return it)
+                  const busFromBusesTable = buses.find(bus => bus.driver_id === driver.id);
+                  if (busFromBusesTable) {
+                    setCurrentBus(busFromBusesTable);
+                    console.log('✅ Assigned bus found from buses table:', busFromBusesTable.bus_number || busFromBusesTable.name);
+                  } else {
+                    console.log('❌ No bus assignment found for driver:', driver.id);
+                    console.log('📋 Available buses with drivers:', buses.filter(b => b.driver_id).map(b => ({ 
+                      id: b.id, 
+                      name: b.name, 
+                      bus_number: b.bus_number,
+                      driver_id: b.driver_id 
+                    })));
+                  }
+                }
+              } catch (queryError) {
+                console.error('❌ Error querying assignment directly:', queryError);
               }
             }
           } else {
@@ -148,9 +290,11 @@ export default function DriverHomeScreen({ navigation }) {
       }
     };
 
-    // Only load when we have the necessary data
-    if (drivers.length > 0 && driverBusAssignments.length > 0) {
+    // Load when we have drivers - assignments might be empty but we can still check buses table
+    if (drivers.length > 0) {
       loadCurrentDriver();
+    } else {
+      console.log('⚠️ Waiting for drivers to load...');
     }
   }, [drivers, buses, driverBusAssignments, routes]);
 
@@ -561,34 +705,10 @@ export default function DriverHomeScreen({ navigation }) {
       action: 'endTrip',
     },
     {
-      title: 'Send Alarm',
-      icon: 'warning',
-      color: '#EF4444',
-      action: 'alarm',
-    },
-    {
-      title: 'Passengers',
-      icon: 'people',
-      color: '#2196F3',
-      action: 'passengers',
-    },
-    {
       title: 'Capacity',
       icon: 'speedometer',
       color: '#00BCD4',
       action: 'capacity',
-    },
-    {
-      title: 'Report Issue',
-      icon: 'alert-circle',
-      color: '#FF9800',
-      action: 'reportIssue',
-    },
-    {
-      title: 'Emergency',
-      icon: 'alert-circle',
-      color: '#E91E63',
-      action: 'emergency',
     },
     {
       title: 'Profile',
@@ -691,47 +811,110 @@ export default function DriverHomeScreen({ navigation }) {
           Alert.alert('No active trip', 'You are not currently on an active trip.');
         } else {
           try {
-            // End trip in database
-            await endTrip(currentTrip.scheduleId, {
-              busId: currentTrip.busId
-            });
-            
-            // Update driver status
-            await updateDriverStatus(currentDriver.id, 'inactive');
-            
-            // End driver session
-            const sessionData = await AsyncStorage.getItem('driverSession');
-            if (sessionData) {
-              const session = JSON.parse(sessionData);
-              await endDriverSession(session.id);
+            // Validate we have a busId (required for ending trip)
+            if (!currentTrip.busId && !currentBus?.id) {
+              Alert.alert('Error', 'Bus ID is missing. Cannot end trip.');
+              return;
             }
-            
-            // Clear driver session and trip data
-            await AsyncStorage.removeItem('driverSession');
-            await AsyncStorage.removeItem('currentTrip');
-            
+
+            const busId = currentTrip.busId || currentBus?.id;
+
+            // Optimistically update UI state first (same as Go Off Duty)
             setIsOnDuty(false);
             setCurrentTrip(null);
             setPassengerCount(0);
             setTripStartTime(null);
+            setCurrentLocation(null);
 
-            // Ensure background tracking is fully stopped when the trip ends
+            // Stop location updates (non-fatal if this fails)
+            try { 
+              await stopLocationUpdates(); 
+            } catch (e) { 
+              console.warn('stopLocationUpdates failed:', e?.message || e); 
+            }
+
+            // Stop background tracking (non-fatal if this fails)
             try {
               await setDriverBackgroundDutyStatus('off_duty');
               await stopDriverBackgroundTracking();
-            } catch (bgError) {
-              console.warn('⚠️ Failed to stop driver background tracking on trip end:', bgError?.message || bgError);
+            } catch (e) { 
+              console.warn('stopDriverBackgroundTracking failed:', e?.message || e); 
+            }
+
+            // Update bus status directly (same approach as Go Off Duty)
+            // This is the critical operation - do it first and handle errors gracefully
+            if (supabase && busId) {
+              try {
+                await supabase
+                  .from('buses')
+                  .update({
+                    status: 'inactive',
+                    tracking_status: 'stopped',
+                    driver_id: null,
+                    updated_at: new Date().toISOString(),
+                    last_location_update: new Date().toISOString(),
+                  })
+                  .eq('id', busId);
+                console.log('✅ Bus status updated successfully');
+              } catch (busError) {
+                console.warn('⚠️ Direct bus update failed (non-fatal):', busError?.message || busError);
+              }
+            }
+
+            // Try to update schedule if scheduleId exists (non-fatal)
+            if (currentTrip.scheduleId) {
+              try {
+                await endTrip(currentTrip.scheduleId, { busId });
+              } catch (scheduleError) {
+                console.warn('⚠️ Schedule update failed (non-fatal):', scheduleError?.message || scheduleError);
+              }
+            }
+
+            // Update driver status (best-effort, don't fail if this errors)
+            if (currentDriver?.id) {
+              try {
+                await updateDriverStatus(currentDriver.id, 'inactive');
+              } catch (statusError) {
+                console.warn('⚠️ Failed to update driver status (non-fatal):', statusError?.message || statusError);
+              }
+            }
+            
+            // End driver session (best-effort, don't fail if this errors)
+            try {
+              const sessionData = await AsyncStorage.getItem('driverSession');
+              if (sessionData) {
+                const session = JSON.parse(sessionData);
+                if (session?.id) {
+                  try {
+                    await endDriverSession(session.id);
+                  } catch (e) {
+                    console.warn('endDriverSession failed:', e?.message || e);
+                  }
+                }
+              }
+            } catch (sessionError) {
+              console.warn('⚠️ Failed to end driver session (non-fatal):', sessionError?.message || sessionError);
+            }
+            
+            // Clear driver session and trip data (non-blocking)
+            try {
+              await AsyncStorage.removeItem('driverSession');
+            } catch (e) {
+              console.warn('removeItem(driverSession) failed:', e?.message || e);
+            }
+            try {
+              await AsyncStorage.removeItem('currentTrip');
+            } catch (e) {
+              console.warn('removeItem(currentTrip) failed:', e?.message || e);
             }
             
             Alert.alert('Trip Ended', 'Your trip has been ended successfully.');
           } catch (error) {
-            console.error('Error ending trip:', error);
-            Alert.alert('Error', 'Failed to end trip. Please try again.');
+            console.error('❌ Unexpected error ending trip:', error);
+            // Even if there's an error, the UI is already updated, so show success
+            Alert.alert('Trip Ended', 'Your trip has been ended. Some cleanup operations may have failed, but you are now off duty.');
           }
         }
-        break;
-      case 'passengers':
-        setShowPassengerModal(true);
         break;
       case 'capacity':
         if (!currentBus) {
@@ -741,15 +924,6 @@ export default function DriverHomeScreen({ navigation }) {
           setCurrentCapacity(currentBus.capacity_percentage || 0);
           setShowCapacityModal(true);
         }
-        break;
-      case 'alarm':
-        setShowAlarmModal(true);
-        break;
-      case 'reportIssue':
-        navigation.navigate('DriverMaintenance');
-        break;
-      case 'emergency':
-        navigation.navigate('DriverEmergency');
         break;
       case 'profile':
         navigation.navigate('DriverProfile');
@@ -883,14 +1057,28 @@ export default function DriverHomeScreen({ navigation }) {
               try { await AsyncStorage.removeItem('driverSession'); } catch (e) { console.warn('removeItem(driverSession) failed:', e?.message || e); }
 
               // Update driver status (continue even if this fails due to RLS/columns)
+              let driverStatusUpdated = false;
               if (currentDriver?.id) {
-                try { await updateDriverStatus(currentDriver.id, 'inactive'); } catch (e) { console.warn('updateDriverStatus failed:', e?.message || e); }
+                try { 
+                  const result = await updateDriverStatus(currentDriver.id, 'inactive');
+                  if (result && result.length > 0) {
+                    driverStatusUpdated = true;
+                    console.log('✅ Driver status updated to inactive:', currentDriver.id);
+                  } else {
+                    console.warn('⚠️ Driver status update returned no data:', currentDriver.id);
+                  }
+                } catch (e) { 
+                  console.error('❌ updateDriverStatus failed:', e?.message || e);
+                  // Show error to user so they know it failed
+                  Alert.alert('Warning', `Driver status update failed: ${e?.message || 'Unknown error'}. The bus may still appear on the map.`);
+                }
               }
 
               // Hard enforce bus offline in DB so status can't stay 'active'
+              let busStatusUpdated = false;
               if (supabase && currentBus?.id) {
                 try {
-                  await supabase
+                  const { data, error } = await supabase
                     .from('buses')
                     .update({
                       status: 'inactive',
@@ -899,11 +1087,32 @@ export default function DriverHomeScreen({ navigation }) {
                       updated_at: new Date().toISOString(),
                       last_location_update: new Date().toISOString(),
                     })
-                    .eq('id', currentBus.id);
+                    .eq('id', currentBus.id)
+                    .select();
+                  
+                  if (error) {
+                    console.error('❌ Bus status update error:', error);
+                    Alert.alert('Warning', `Bus status update failed: ${error.message}. The bus may still appear on the map.`);
+                  } else if (data && data.length > 0) {
+                    busStatusUpdated = true;
+                    console.log('✅ Bus status updated to inactive:', currentBus.id, data[0]);
+                  } else {
+                    console.warn('⚠️ Bus status update returned no data. Bus may not exist or RLS blocked update:', currentBus.id);
+                    Alert.alert('Warning', 'Bus status update may have failed. Please check the database manually.');
+                  }
                 } catch (e) {
-                  console.warn('force bus offline failed:', e?.message || e);
+                  console.error('❌ force bus offline failed:', e?.message || e);
+                  Alert.alert('Error', `Failed to update bus status: ${e?.message || 'Unknown error'}. Please check the database.`);
                 }
               }
+              
+              // Log final status for debugging
+              console.log('📊 Off-duty update summary:', {
+                driverStatusUpdated,
+                busStatusUpdated,
+                driverId: currentDriver?.id,
+                busId: currentBus?.id
+              });
 
               Alert.alert('Off Duty', 'You are now off duty. Location tracking has stopped.');
             } catch (error) {
@@ -947,6 +1156,7 @@ export default function DriverHomeScreen({ navigation }) {
       </View>
     );
   }
+
 
   return (
     <View style={styles.container}>
@@ -1098,108 +1308,6 @@ export default function DriverHomeScreen({ navigation }) {
           </View>
         )}
       </ScrollView>
-
-      {/* Passenger Management Modal */}
-      <Modal
-        visible={showPassengerModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowPassengerModal(false)}>
-              <Text style={styles.modalCancel}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Passenger Count</Text>
-            <TouchableOpacity onPress={() => setShowPassengerModal(false)}>
-              <Text style={styles.modalSave}>Done</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.modalContent}>
-            <View style={styles.passengerCounter}>
-              <Text style={styles.passengerLabel}>Current Passengers</Text>
-              <View style={styles.counterContainer}>
-                <TouchableOpacity 
-                  style={styles.counterButton}
-                  onPress={() => setPassengerCount(Math.max(0, passengerCount - 1))}
-                >
-                  <Ionicons name="remove" size={24} color="#fff" />
-                </TouchableOpacity>
-                <Text style={styles.counterText}>{passengerCount}</Text>
-                <TouchableOpacity 
-                  style={styles.counterButton}
-                  onPress={() => setPassengerCount(passengerCount + 1)}
-                >
-                  <Ionicons name="add" size={24} color="#fff" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.capacityText}>Max Capacity: 50</Text>
-            </View>
-
-            <View style={styles.passengerActions}>
-              <TouchableOpacity 
-                style={styles.actionButton}
-                onPress={async () => {
-                  try {
-                    setPassengerCount(0);
-                    if (currentTrip?.busId) {
-                      await updatePassengerCount(currentTrip.busId, 0);
-                    }
-                    Alert.alert('Reset', 'Passenger count has been reset to 0');
-                  } catch (error) {
-                    console.error('Error resetting passenger count:', error);
-                    Alert.alert('Error', 'Failed to reset passenger count');
-                  }
-                }}
-              >
-                <Ionicons name="refresh" size={20} color={colors.brand} />
-                <Text style={styles.actionButtonText}>Reset Count</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.actionButton}
-                onPress={async () => {
-                  try {
-                    const newCount = passengerCount + 1;
-                    setPassengerCount(newCount);
-                    if (currentTrip?.busId) {
-                      await updatePassengerCount(currentTrip.busId, newCount);
-                    }
-                    Alert.alert('Boarding', 'Passenger boarding recorded');
-                  } catch (error) {
-                    console.error('Error recording boarding:', error);
-                    Alert.alert('Error', 'Failed to record boarding');
-                  }
-                }}
-              >
-                <Ionicons name="arrow-up" size={20} color="#10B981" />
-                <Text style={styles.actionButtonText}>Record Boarding</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.actionButton}
-                onPress={async () => {
-                  try {
-                    const newCount = Math.max(0, passengerCount - 1);
-                    setPassengerCount(newCount);
-                    if (currentTrip?.busId) {
-                      await updatePassengerCount(currentTrip.busId, newCount);
-                    }
-                    Alert.alert('Alighting', 'Passenger alighting recorded');
-                  } catch (error) {
-                    console.error('Error recording alighting:', error);
-                    Alert.alert('Error', 'Failed to record alighting');
-                  }
-                }}
-              >
-                <Ionicons name="arrow-down" size={20} color="#EF4444" />
-                <Text style={styles.actionButtonText}>Record Alighting</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Capacity Status Modal */}
       <CapacityStatusModal
@@ -1370,13 +1478,6 @@ export default function DriverHomeScreen({ navigation }) {
         </SafeAreaView>
       </Modal>
 
-      <AlarmModal
-        visible={showAlarmModal}
-        onClose={() => setShowAlarmModal(false)}
-        userType="driver"
-        driverId={currentDriver?.id}
-        busId={currentBus?.id}
-      />
 
     </View>
   );

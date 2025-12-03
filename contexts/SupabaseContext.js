@@ -62,7 +62,9 @@ export const SupabaseProvider = ({ children }) => {
       const { data: busesData } = await supabase.from('buses').select('*').limit(5);
       const { data: routesData } = await supabase.from('routes').select('*').limit(5);
       const { data: driversData } = await supabase.from('drivers').select('*').limit(10);
-      const { data: assignmentsData } = await supabase.from('driver_bus_assignments').select('*');
+      // CRITICAL: Use the helper function to get assignments with joined bus/driver data
+      // This ensures the app can display bus names properly
+      const assignmentsData = await supabaseHelpers.getDriverBusAssignments();
       
       setBuses(busesData || []);
       setRoutes(routesData || []);
@@ -168,14 +170,20 @@ export const SupabaseProvider = ({ children }) => {
         const justWentOnDuty = updatedBus.updated_at && 
           new Date(updatedBus.updated_at) > new Date(Date.now() - 2 * 60 * 1000);
         
-        // Only remove bus if:
-        // 1. No active driver (driver went off duty)
-        // 2. Has valid coordinates but location is stale (been offline too long)
-        // This allows buses to appear immediately when driver goes on duty, even without coordinates
-        // Also allows buses that have been on duty but GPS hasn't started yet
+        // CRITICAL: Remove bus immediately if driver went off duty
+        // This must happen BEFORE any merge logic to ensure the bus disappears immediately
         if (!hasActiveDriver) {
-          console.log('🚫 Removing bus - no active driver:', updatedBus.id);
-          setBuses(prevBuses => prevBuses.filter(b => b.id !== updatedBus.id));
+          console.log('🚫 Removing bus - no active driver (driver went off duty):', updatedBus.id, {
+            driver_id: updatedBus.driver_id,
+            status: updatedBus.status
+          });
+          setBuses(prevBuses => {
+            const filtered = prevBuses.filter(b => b.id !== updatedBus.id);
+            if (filtered.length !== prevBuses.length) {
+              console.log('✅ Bus removed successfully from context. Remaining buses:', filtered.length);
+            }
+            return filtered;
+          });
           return;
         }
         
@@ -198,10 +206,19 @@ export const SupabaseProvider = ({ children }) => {
         }
         
         // Merge all relevant fields so visibility filters react correctly
+        // IMPORTANT: Only merge if bus has active driver (already checked above)
         setBuses(prevBuses => {
           const exists = prevBuses.some(b => b.id === updatedBus.id);
           const merged = prevBuses.map(bus => {
             if (bus.id !== updatedBus.id) return bus;
+            
+            // CRITICAL: Double-check active driver status after merge
+            // This ensures we don't accidentally keep a bus that became inactive
+            const mergedHasActiveDriver = updatedBus.driver_id && updatedBus.status === 'active';
+            if (!mergedHasActiveDriver) {
+              // Bus became inactive during merge - don't include it
+              return null;
+            }
             
             // Only update coordinates if the new update has valid coordinates
             // This prevents overwriting valid coordinates with null/undefined when
@@ -220,13 +237,13 @@ export const SupabaseProvider = ({ children }) => {
               heading: updatedBus.heading != null ? updatedBus.heading : bus.heading,
               tracking_status: updatedBus.tracking_status || bus.tracking_status,
               last_location_update: updatedBus.last_location_update || bus.last_location_update || updatedBus.updated_at,
-              // visibility-critical fields
+              // visibility-critical fields - always update these
               status: updatedBus.status,
               driver_id: updatedBus.driver_id,
               route_id: updatedBus.route_id,
               updated_at: updatedBus.updated_at,
             };
-          });
+          }).filter(bus => bus !== null); // Remove any buses that became null (inactive)
           
           // If bus doesn't exist and has valid data, add it
           // Allow buses that just went on duty even without coordinates yet (will get coordinates soon)
@@ -244,19 +261,28 @@ export const SupabaseProvider = ({ children }) => {
             return [...merged, busToAdd];
           }
           
-          // Filter out any buses with invalid coordinates, BUT allow buses that just went on duty
-          // Even if they don't have coordinates yet (they'll get them soon)
+          // CRITICAL: Final filter to ensure no inactive buses remain
+          // Filter out any buses without active drivers OR invalid coordinates
+          // BUT allow buses that just went on duty even without coordinates yet
           return merged.filter(bus => {
+            if (!bus) return false;
+            
             const busJustWentOnDuty = bus.updated_at && 
               new Date(bus.updated_at) > new Date(Date.now() - 2 * 60 * 1000);
             const hasValidCoords = bus.latitude != null && 
               bus.longitude != null && 
               !isNaN(bus.latitude) && 
               !isNaN(bus.longitude);
-            const hasActiveDriver = bus.driver_id && bus.status === 'active';
+            const busHasActiveDriver = bus.driver_id && bus.status === 'active';
+            
+            // Remove bus if it doesn't have an active driver
+            if (!busHasActiveDriver) {
+              console.log('🚫 Filter removing inactive bus:', bus.id);
+              return false;
+            }
             
             // Keep bus if: has active driver AND (has valid coordinates OR just went on duty)
-            return hasActiveDriver && (hasValidCoords || busJustWentOnDuty);
+            return busHasActiveDriver && (hasValidCoords || busJustWentOnDuty);
           });
         });
       } else if (payload.event === 'DELETE') {
@@ -322,12 +348,13 @@ export const SupabaseProvider = ({ children }) => {
         setBuses((prevBuses) => {
           const incoming = busesData || [];
 
-          // First load or no previous data: just take what we got.
+          // First load or no previous data: just take what we got (already filtered by getBuses).
           if (!prevBuses || prevBuses.length === 0) {
             return incoming;
           }
 
           const prevMap = new Map(prevBuses.map((b) => [b.id, b]));
+          const incomingIds = new Set(incoming.map((b) => b.id));
 
           const merged = incoming.map((bus) => {
             const existing = prevMap.get(bus.id);
@@ -366,7 +393,22 @@ export const SupabaseProvider = ({ children }) => {
             return mergedBus;
           });
 
-          return merged;
+          // CRITICAL: Remove buses from prevBuses that are no longer in incoming (driver went off duty)
+          // Also filter out any buses in merged that no longer have active drivers
+          const filtered = merged.filter(bus => {
+            const hasActiveDriver = bus.driver_id && bus.status === 'active';
+            return hasActiveDriver;
+          });
+
+          // Remove buses from prevBuses that are no longer in incoming
+          prevBuses.forEach(bus => {
+            if (!incomingIds.has(bus.id)) {
+              // Bus was removed from server (driver went off duty)
+              console.log('🚫 Removing bus from context (no longer in polled data):', bus.id);
+            }
+          });
+
+          return filtered;
         });
       } catch (err) {
         console.warn('⚠️ Error polling buses:', err.message);
@@ -621,7 +663,8 @@ export const SupabaseProvider = ({ children }) => {
     try {
       console.log('🔄 Refreshing driver data...');
       const { data: driversData } = await supabase.from('drivers').select('*').limit(10);
-      const { data: assignmentsData } = await supabase.from('driver_bus_assignments').select('*');
+      // CRITICAL: Use the helper function to get assignments with joined bus/driver data
+      const assignmentsData = await supabaseHelpers.getDriverBusAssignments();
       
       setDrivers(driversData || []);
       setDriverBusAssignments(assignmentsData || []);

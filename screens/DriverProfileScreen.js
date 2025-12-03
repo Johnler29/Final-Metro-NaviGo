@@ -29,6 +29,7 @@ export default function DriverProfileScreen({ navigation }) {
 
   // Get data from Supabase context
   const { 
+    supabase,
     drivers, 
     buses, 
     schedules, 
@@ -76,17 +77,91 @@ export default function DriverProfileScreen({ navigation }) {
             });
             
             // Find assigned bus for this driver
-            const assignment = driverBusAssignments.find(assignment => assignment.drivers?.id === currentDriver.id);
+            // CRITICAL: Only find active assignments
+            const assignment = driverBusAssignments.find(assignment => 
+              assignment.is_active === true &&
+              (assignment.drivers?.id === currentDriver.id || 
+               assignment.driver_id === currentDriver.id)
+            );
+            
+            console.log('🔍 Looking for assignment for driver:', currentDriver.id);
+            console.log('📋 Available assignments:', driverBusAssignments.length);
+            console.log('📋 Sample assignment:', driverBusAssignments[0]);
+            
             if (assignment) {
+              console.log('✅ Assignment found:', assignment);
               // Use the bus data from the assignment (which includes nested route info)
               if (assignment.buses) {
                 setCurrentBus(assignment.buses);
-                console.log('✅ Assigned bus found:', assignment.buses);
+                console.log('✅ Assigned bus found from assignments:', assignment.buses);
+              } else if (assignment.bus_id) {
+                // Fallback: Find bus by bus_id from assignment
+                console.log('⚠️ Assignment exists but bus data missing. Looking up bus by bus_id:', assignment.bus_id);
+                const foundBus = buses.find(bus => bus.id === assignment.bus_id);
+                if (foundBus) {
+                  setCurrentBus(foundBus);
+                  console.log('✅ Found bus by assignment bus_id:', foundBus);
+                } else {
+                  console.log('❌ Bus not found even with assignment bus_id:', assignment.bus_id);
+                }
               } else {
-                console.log('❌ Bus data not found in assignment');
+                console.log('❌ Assignment found but no bus_id or bus data');
               }
             } else {
-              console.log('❌ No bus assignment found for driver:', currentDriver.id);
+              console.log('❌ No assignment found in loaded data. Trying direct database query...');
+              
+              // Fallback 1: Query database directly for assignment
+              try {
+                const { data: directAssignment, error: assignmentError } = await supabase
+                  .from('driver_bus_assignments')
+                  .select(`
+                    id,
+                    driver_id,
+                    bus_id,
+                    is_active,
+                    buses:bus_id(
+                      bus_number,
+                      name,
+                      route_id,
+                      id,
+                      status,
+                      routes:route_id(id, route_number, name)
+                    )
+                  `)
+                  .eq('driver_id', currentDriver.id)
+                  .eq('is_active', true)
+                  .order('assigned_at', { ascending: false })
+                  .limit(1)
+                  .single();
+                
+                if (!assignmentError && directAssignment) {
+                  console.log('✅ Found assignment via direct query:', directAssignment);
+                  if (directAssignment.buses) {
+                    setCurrentBus(directAssignment.buses);
+                    console.log('✅ Assigned bus found via direct query:', directAssignment.buses);
+                  } else if (directAssignment.bus_id) {
+                    const foundBus = buses.find(bus => bus.id === directAssignment.bus_id);
+                    if (foundBus) {
+                      setCurrentBus(foundBus);
+                      console.log('✅ Found bus by direct query bus_id:', foundBus);
+                    }
+                  }
+                } else {
+                  console.log('⚠️ Direct query also found no assignment:', assignmentError?.message);
+                  
+                  // Fallback 2: Check buses table directly
+                  const busFromBusesTable = buses.find(bus => bus.driver_id === currentDriver.id);
+                  if (busFromBusesTable) {
+                    setCurrentBus(busFromBusesTable);
+                    console.log('✅ Assigned bus found from buses table:', busFromBusesTable);
+                  } else {
+                    console.log('❌ No bus assignment found for driver:', currentDriver.id);
+                    console.log('📋 Available buses with drivers:', buses.filter(b => b.driver_id).map(b => ({ id: b.id, name: b.name, driver_id: b.driver_id })));
+                  }
+                }
+              } catch (queryError) {
+                console.error('❌ Error querying assignment directly:', queryError);
+              }
             }
           }
         } else {
@@ -102,12 +177,34 @@ export default function DriverProfileScreen({ navigation }) {
             });
             
             // Find assigned bus for this driver
-            const assignment = driverBusAssignments.find(assignment => assignment.drivers?.id === currentDriver.id);
+            // CRITICAL: Only find active assignments
+            const assignment = driverBusAssignments.find(assignment => 
+              assignment.is_active === true &&
+              (assignment.drivers?.id === currentDriver.id || 
+               assignment.driver_id === currentDriver.id)
+            );
+            
             if (assignment) {
-              // Use the bus data from the assignment (which includes nested route info)
+              console.log('✅ Assignment found:', assignment);
               if (assignment.buses) {
                 setCurrentBus(assignment.buses);
-                console.log('✅ Assigned bus found:', assignment.buses);
+                console.log('✅ Assigned bus found from assignments:', assignment.buses);
+              } else if (assignment.bus_id) {
+                // Fallback: Find bus by bus_id from assignment
+                const foundBus = buses.find(bus => bus.id === assignment.bus_id);
+                if (foundBus) {
+                  setCurrentBus(foundBus);
+                  console.log('✅ Found bus by assignment bus_id:', foundBus);
+                }
+              }
+            } else {
+              // Fallback: Check buses table directly
+              const busFromBusesTable = buses.find(bus => bus.driver_id === currentDriver.id);
+              if (busFromBusesTable) {
+                setCurrentBus(busFromBusesTable);
+                console.log('✅ Assigned bus found from buses table:', busFromBusesTable);
+              } else {
+                console.log('❌ No bus assignment found for driver:', currentDriver.id);
               }
             }
           }
@@ -127,10 +224,11 @@ export default function DriverProfileScreen({ navigation }) {
       }
     };
 
-    if (drivers.length > 0 && driverBusAssignments.length > 0) {
+    // Load when we have drivers - assignments might be empty but we can still check buses table
+    if (drivers.length > 0) {
       loadCurrentDriver();
     } else {
-      console.log('⚠️ No drivers or assignments available yet');
+      console.log('⚠️ Waiting for drivers to load...');
     }
   }, [drivers, buses, driverBusAssignments]);
 
@@ -335,7 +433,7 @@ export default function DriverProfileScreen({ navigation }) {
                 <Ionicons name="car" size={18} color={colors.brand} />
               </View>
               <Text style={styles.infoText}>
-                Current Bus: {currentBus ? `${currentBus.bus_number} ${currentBus.name || ''}`.trim() : 'N/A'}
+                Current Bus: {currentBus ? `${currentBus.bus_number || currentBus.name || 'Bus'}`.trim() : 'N/A'}
               </Text>
             </View>
           </View>

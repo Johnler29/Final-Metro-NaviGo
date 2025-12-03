@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabase } from '../contexts/SupabaseContext';
+import { supabase } from '../lib/supabase';
 
 // Optional prop: onSwitchToDriver lets the user choose to log in as a driver instead of passenger
 export default function LoginScreen({ onSwitchToDriver }) {
@@ -23,7 +24,7 @@ export default function LoginScreen({ onSwitchToDriver }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
   const { createUser } = useSupabase();
 
   const handleLogin = async () => {
@@ -110,6 +111,68 @@ export default function LoginScreen({ onSwitchToDriver }) {
     }
   };
 
+  const handleForgotPassword = async () => {
+    // Check if email is already entered
+    if (!email || !email.trim()) {
+      Alert.alert(
+        'Forgot Password',
+        'Please enter your email address in the email field above, then tap "Forgot Password?" again.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Error', 'Please enter a valid email address.');
+      return;
+    }
+
+    // Confirm before sending
+    Alert.alert(
+      'Reset Password',
+      `Send password reset link to ${email.trim()}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Send',
+          onPress: () => sendPasswordReset(email.trim()),
+        },
+      ]
+    );
+  };
+
+  const sendPasswordReset = async (emailAddress) => {
+    try {
+      setLoading(true);
+      await resetPassword(emailAddress);
+      
+      Alert.alert(
+        'Password Reset Email Sent',
+        'Please check your email for a password reset link.\n\n' +
+        'IMPORTANT: After clicking the link in your email:\n' +
+        '1. The link will open in your browser (this is normal)\n' +
+        '2. Open this app manually\n' +
+        '3. The app will detect the reset request and show the password reset screen\n\n' +
+        'If you don\'t see the email, check your spam folder.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      const message =
+        error?.message?.includes('not found') ||
+        error?.message?.includes('does not exist')
+          ? 'No account found with this email address.'
+          : error?.message || 'Failed to send password reset email. Please try again.';
+      Alert.alert('Error', message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
@@ -175,6 +238,55 @@ export default function LoginScreen({ onSwitchToDriver }) {
               />
             </TouchableOpacity>
           </View>
+
+          {!isCreatingAccount && (
+            <>
+              <TouchableOpacity
+                style={styles.forgotPasswordButton}
+                onPress={handleForgotPassword}
+                disabled={loading}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.checkResetButton}
+                onPress={async () => {
+                  // Check if there's an active recovery session
+                  try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session) {
+                      // Check if we can update password (indicates recovery session)
+                      Alert.alert(
+                        'Password Reset',
+                        'A password reset session was detected. You can now set your new password.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { 
+                            text: 'Reset Password', 
+                            onPress: () => {
+                              // Trigger the reset password screen
+                              // This will be handled by AuthContext detecting the session
+                              navigation?.navigate?.('ResetPassword');
+                            }
+                          }
+                        ]
+                      );
+                    } else {
+                      Alert.alert(
+                        'No Reset Session',
+                        'No password reset session found. Please request a password reset first.'
+                      );
+                    }
+                  } catch (error) {
+                    Alert.alert('Error', 'Could not check reset session. Please try again.');
+                  }
+                }}
+                disabled={loading}
+              >
+                <Text style={styles.checkResetText}>Check for Password Reset</Text>
+              </TouchableOpacity>
+            </>
+          )}
 
           <TouchableOpacity
             style={[styles.button, styles.loginButton]}
@@ -364,5 +476,32 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontFamily: 'System',
     letterSpacing: -0.3,
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  forgotPasswordText: {
+    color: '#f59e0b',
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'System',
+  },
+  checkResetButton: {
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+  },
+  checkResetText: {
+    color: '#6B7280',
+    fontSize: 13,
+    fontWeight: '500',
+    fontFamily: 'System',
   },
 });

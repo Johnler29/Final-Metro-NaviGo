@@ -352,9 +352,22 @@ export const SupabaseProvider = ({ children }) => {
   };
 
   const updateBus = async (id, updates) => {
+    // IMPORTANT: When assigning a driver, don't auto-activate the bus
+    // Driver must manually go on duty to activate
+    const safeUpdates = { ...updates };
+    
+    // If driver_id is being assigned and status is not explicitly set, ensure bus stays inactive
+    if (safeUpdates.driver_id !== undefined && safeUpdates.driver_id !== null) {
+      // Only set status if it's explicitly provided, otherwise keep existing status (likely inactive)
+      if (safeUpdates.status === undefined) {
+        // Don't change status - let it remain as is (inactive by default)
+        // The driver will activate it when they go on duty
+      }
+    }
+    
     const { data, error } = await supabase
       .from('buses')
-      .update(updates)
+      .update(safeUpdates)
       .eq('id', id)
       .select();
     
@@ -363,12 +376,15 @@ export const SupabaseProvider = ({ children }) => {
     // Handle driver assignment changes
     if (updates.driver_id !== undefined) {
       if (updates.driver_id) {
-        // Assign driver to bus
+        // Assign driver to bus (but don't activate - driver must go on duty manually)
+        // CRITICAL: Set is_active = true so mobile app can find the assignment
         const { error: assignmentError } = await supabase
           .from('driver_bus_assignments')
           .upsert([{
             driver_id: updates.driver_id,
             bus_id: id,
+            is_active: true, // Explicitly set to true so mobile app can find it
+            unassigned_at: null, // Clear unassigned_at if it was set
             assigned_by: (await supabase.auth.getUser()).data.user?.id
           }], {
             onConflict: 'driver_id,bus_id'

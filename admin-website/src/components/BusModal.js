@@ -88,9 +88,11 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
       capacity: parseInt(formData.capacity),
       route_id: formData.route_id || null,
       driver_id: formData.driver_id || null,
-      // Automatically set status and tracking_status based on driver assignment
-      status: formData.driver_id ? 'active' : 'inactive',
-      tracking_status: formData.driver_id ? 'stopped' : 'stopped'
+      // IMPORTANT: Don't auto-activate bus when assigning driver
+      // Driver must manually go on duty to activate the bus
+      // Only set to inactive if no driver assigned, otherwise preserve existing status
+      status: formData.driver_id ? (formData.status || 'inactive') : 'inactive',
+      tracking_status: 'stopped' // Always stopped until driver goes on duty
     };
 
     // Only include location fields when manual override is enabled
