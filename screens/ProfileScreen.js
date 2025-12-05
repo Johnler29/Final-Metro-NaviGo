@@ -11,17 +11,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabase } from '../contexts/SupabaseContext';
-import { useDrawer } from '../contexts/DrawerContext';
 import { colors, spacing, radius, shadows } from '../styles/uiTheme';
 
 export default function ProfileScreen({ navigation }) {
   const { user, signOut } = useAuth();
-  const { openDrawer } = useDrawer();
   const { buses, routes } = useSupabase();
-
-  const handleMenuPress = () => {
-    openDrawer();
-  };
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -101,7 +95,7 @@ export default function ProfileScreen({ navigation }) {
       {/* Header */}
       <View style={styles.headerContainer}>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
+          <TouchableOpacity style={styles.menuButton} onPress={() => {}}>
             <Ionicons name="menu-outline" size={22} color="#fff" />
           </TouchableOpacity>
           

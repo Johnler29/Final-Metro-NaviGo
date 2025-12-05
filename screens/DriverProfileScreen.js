@@ -325,7 +325,7 @@ export default function DriverProfileScreen({ navigation }) {
   };
 
   const handleMenuPress = () => {
-    navigation.getParent()?.openDrawer();
+    // Drawer removed
   };
 
   if (loading) {

@@ -42,9 +42,7 @@ export default function HelpScreen({ navigation }) {
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Help & Support</Text>
-          <TouchableOpacity style={styles.menuButton} onPress={() => navigation.openDrawer()}>
-            <Ionicons name="menu" size={24} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.placeholder} />
         </View>
       </View>
 
@@ -107,13 +105,9 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     letterSpacing: -0.8,
   },
-  menuButton: {
+  placeholder: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   content: {
     flex: 1,

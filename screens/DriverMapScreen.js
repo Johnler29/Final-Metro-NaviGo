@@ -519,7 +519,7 @@ export default function DriverMapScreen({ navigation, route }) {
   };
 
   const handleMenuPress = () => {
-    navigation.getParent()?.openDrawer();
+    // Drawer removed
   };
 
   if (isLoading) {

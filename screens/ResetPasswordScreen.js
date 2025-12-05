@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { validatePassword, getPasswordRequirements, DEFAULT_PASSWORD_OPTIONS } from '../utils/passwordValidation';
+import PasswordRequirementsModal from '../components/PasswordRequirementsModal';
 
 export default function ResetPasswordScreen({ navigation, route }) {
   const [password, setPassword] = useState('');
@@ -19,6 +21,7 @@ export default function ResetPasswordScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const { updatePassword, setShowResetPassword, signOut } = useAuth();
 
   const handleResetPassword = async () => {
@@ -27,8 +30,10 @@ export default function ResetPasswordScreen({ navigation, route }) {
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+    // Validate password requirements
+    const passwordValidation = validatePassword(password, DEFAULT_PASSWORD_OPTIONS);
+    if (!passwordValidation.isValid) {
+      setShowPasswordModal(true);
       return;
     }
 
@@ -119,6 +124,13 @@ export default function ResetPasswordScreen({ navigation, route }) {
               />
             </TouchableOpacity>
           </View>
+          <TouchableOpacity onPress={() => setShowPasswordModal(true)}>
+            <Text style={styles.passwordHint}>
+              Password must: {getPasswordRequirements(DEFAULT_PASSWORD_OPTIONS)}
+              {' '}
+              <Text style={styles.passwordHintLink}>View details</Text>
+            </Text>
+          </TouchableOpacity>
 
           <View style={styles.inputContainer}>
             <Ionicons name="lock-closed" size={20} color="#6B7280" style={styles.inputIcon} />
@@ -172,6 +184,14 @@ export default function ResetPasswordScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Password Requirements Modal */}
+      <PasswordRequirementsModal
+        visible={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        password={password}
+        options={DEFAULT_PASSWORD_OPTIONS}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -294,6 +314,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
     fontFamily: 'System',
+  },
+  passwordHint: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: -12,
+    marginBottom: 12,
+    marginLeft: 4,
+    fontFamily: 'System',
+  },
+  passwordHintLink: {
+    color: '#F59E0B',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });
 

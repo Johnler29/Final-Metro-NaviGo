@@ -262,9 +262,7 @@ export default function RouteScreen({ navigation }) {
             <TouchableOpacity style={styles.clearButton} onPress={clearSearch}>
               <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuButton} onPress={() => navigation.openDrawer()}>
-              <Ionicons name="menu" size={24} color="#fff" />
-            </TouchableOpacity>
+            <View style={styles.placeholder} />
           </View>
         </View>
       </View>
@@ -432,13 +430,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  menuButton: {
+  placeholder: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   content: {
     flex: 1,

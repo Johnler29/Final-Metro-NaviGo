@@ -177,7 +177,7 @@ export default function DriverAnalyticsScreen({ navigation }) {
   };
 
   const handleMenuPress = () => {
-    navigation.getParent()?.openDrawer();
+    // Drawer removed
   };
 
   const handleExportData = () => {

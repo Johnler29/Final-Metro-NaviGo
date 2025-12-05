@@ -197,7 +197,7 @@ export default function DriverEmergencyScreen({ navigation }) {
   };
 
   const handleMenuPress = () => {
-    navigation.getParent()?.openDrawer();
+    // Drawer removed
   };
 
   if (loading) {

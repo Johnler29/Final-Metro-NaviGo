@@ -171,3 +171,4 @@ LEFT JOIN drivers d ON b.driver_id = d.id;
 
 This shows you exactly which buses should be visible and which should be hidden based on their status values.
 
+

@@ -238,7 +238,7 @@ export default function DriverNotificationsScreen({ navigation }) {
   const urgentCount = notifications.filter(n => n.isUrgent && !n.isRead).length;
 
   const handleMenuPress = () => {
-    navigation.getParent()?.openDrawer();
+    // Drawer removed
   };
 
   if (loading) {

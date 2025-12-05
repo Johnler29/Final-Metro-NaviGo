@@ -35,12 +35,8 @@ import SettingsScreen from './screens/SettingsScreen';
 import HelpScreen from './screens/HelpScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
-// Import simple drawer
-import SimpleDrawer from './components/SimpleDrawer';
-
 // Import contexts
 import { SupabaseProvider } from './contexts/SupabaseContext';
-import { DrawerProvider, useDrawer } from './contexts/DrawerContext';
 import { restoreDriverBackgroundTrackingIfNeeded } from './background/driverBackgroundTasks';
 
 // Import background task to ensure it's registered at app startup
@@ -443,7 +439,6 @@ function DriverAuthWrapper({ navigation }) {
 // Main App Component with Authentication
 function AppContent() {
   const { user, loading, showResetPassword, setShowResetPassword } = useAuth();
-  const { drawerVisible, closeDrawer } = useDrawer();
   const [currentRole, setCurrentRole] = useState('passenger');
   const [driverAuthenticated, setDriverAuthenticated] = useState(false);
   const navigationRef = React.useRef(null);
@@ -527,22 +522,6 @@ function AppContent() {
       <NavigationContainer>
         <StatusBar style="light" backgroundColor={colors.brand} />
         <View style={styles.container}>
-          {/* Simple Drawer Modal */}
-          <SimpleDrawer
-            visible={drawerVisible}
-            onClose={closeDrawer}
-            currentRole={currentRole}
-            onRoleChange={handleRoleChange}
-            navigation={{ navigate: (screen) => {
-              // Handle navigation based on screen name
-              if (screen === 'PassengerTabs') {
-                setCurrentRole('passenger');
-              } else if (screen === 'DriverTabs') {
-                setCurrentRole('driver');
-              }
-            }}}
-          />
-          
           {/* Main Navigation */}
           {currentRole === 'passenger' ? (
             <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -573,9 +552,7 @@ export default function App() {
   return (
     <SupabaseProvider>
       <AuthProvider>
-        <DrawerProvider>
-          <AppContent />
-        </DrawerProvider>
+        <AppContent />
       </AuthProvider>
     </SupabaseProvider>
   );

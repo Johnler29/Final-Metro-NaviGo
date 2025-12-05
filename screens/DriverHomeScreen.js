@@ -82,8 +82,6 @@ export default function DriverHomeScreen({ navigation }) {
     completePing
   } = useSupabase();
 
-  // Get drawer context
-  const { openDrawer } = useDrawer();
 
   // Load current driver information on component mount
   useEffect(() => {
@@ -970,7 +968,7 @@ export default function DriverHomeScreen({ navigation }) {
   };
 
   const handleMenuPress = () => {
-    openDrawer();
+    // Drawer removed
   };
 
   const handleRoleSwitch = () => {

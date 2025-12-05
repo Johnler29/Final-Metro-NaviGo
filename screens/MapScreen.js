@@ -15,7 +15,6 @@ import Constants from 'expo-constants';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { supabaseHelpers } from '../lib/supabase';
 import RealtimeBusMap from '../components/RealtimeBusMap';
-import RealtimeTest from '../components/RealtimeTest';
 import SetAlarmModal from '../components/SetAlarmModal';
 import RouteInfoPanel from '../components/RouteInfoPanel';
 import PingModal from '../components/PingModal';
@@ -26,7 +25,6 @@ export default function MapScreen({ navigation, route }) {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [mapBuses, setMapBuses] = useState([]);
-  const [showTest, setShowTest] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedBusId, setSelectedBusId] = useState(route?.params?.selectedBusId || null);
   const [trackingBus, setTrackingBus] = useState(null);
@@ -407,48 +405,24 @@ export default function MapScreen({ navigation, route }) {
           <Text style={styles.headerSubtitle}>Real-time tracking</Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity 
-            style={styles.headerIconButton}
-            onPress={() => setShowTest(!showTest)}
-          >
-            <Ionicons name="bug" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.headerIconButton}
-            onPress={() => navigation.getParent()?.openDrawer()}
-          >
-            <Ionicons name="menu" size={20} color="#fff" />
-          </TouchableOpacity>
         </View>
       </View>
 
-      {showTest ? (
-        <RealtimeTest />
-      ) : (
-        <RealtimeBusMap
-          initialRegion={initialRegion}
-          onBusSelect={handleBusSelect}
-          selectedBusId={selectedBusId}
-          showArrivalTimes={true}
-          showCapacityStatus={true}
-          userLocation={location?.coords}
-          onBusesLoaded={handleBusesLoaded}
-          selectedRouteId={selectedRouteId}
-          onRouteSelect={handleRouteSelect}
-          selectedRoute={selectedRoute}
-        />
-      )}
+      <RealtimeBusMap
+        initialRegion={initialRegion}
+        onBusSelect={handleBusSelect}
+        selectedBusId={selectedBusId}
+        showArrivalTimes={true}
+        showCapacityStatus={true}
+        userLocation={location?.coords}
+        onBusesLoaded={handleBusesLoaded}
+        selectedRouteId={selectedRouteId}
+        onRouteSelect={handleRouteSelect}
+        selectedRoute={selectedRoute}
+      />
 
       {/* Action buttons */}
       <View style={styles.fabGroup}>
-        {/* Route Selector */}
-        <TouchableOpacity 
-          style={[styles.fab, selectedRouteId && styles.fabActive]} 
-          onPress={() => setShowRouteSelector(true)}
-        >
-          <Ionicons name="map" size={20} color={selectedRouteId ? "#fff" : "#f59e0b"} />
-        </TouchableOpacity>
-
         {/* Refresh Location */}
         <TouchableOpacity style={styles.fab} onPress={getLocation}>
           <Ionicons name="refresh" size={20} color="#f59e0b" />
@@ -465,14 +439,6 @@ export default function MapScreen({ navigation, route }) {
             <Ionicons name="close" size={20} color="#f59e0b" />
           </TouchableOpacity>
         )}
-
-        {/* Route Planner */}
-        <TouchableOpacity 
-          style={[styles.fab, showRouteInfoPanel && styles.fabActive]} 
-          onPress={() => setShowRouteInfoPanel(!showRouteInfoPanel)}
-        >
-          <Ionicons name="map-outline" size={20} color={showRouteInfoPanel ? "#fff" : "#f59e0b"} />
-        </TouchableOpacity>
       </View>
 
       {/* Route Info Panel */}

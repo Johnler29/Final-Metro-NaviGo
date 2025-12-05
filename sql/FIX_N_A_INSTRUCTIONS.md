@@ -130,3 +130,4 @@ If after running the fix and restarting the app it still shows "N/A":
 
 4. **If all checks pass but app still shows N/A**: The app might need a code update to handle edge cases. Check the console logs for specific error messages.
 
+

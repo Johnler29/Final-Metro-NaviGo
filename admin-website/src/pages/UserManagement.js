@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserCheck, Plus, Search, Users, MessageSquare, Shield, Edit, Trash2, Eye, UserPlus, Mail, Phone, Calendar, Filter, Download } from 'lucide-react';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { notifications } from '../utils/notifications';
+import { validatePassword, getPasswordRequirements, DEFAULT_PASSWORD_OPTIONS } from '../utils/passwordValidation';
 
 const UserManagement = () => {
   const { users, feedback, drivers, supabase, createDriverAccount, getDriversWithAuth, updateDriverStatus, deleteDriverAccount } = useSupabase();
@@ -92,6 +93,14 @@ const UserManagement = () => {
     
     if (driverForm.password !== driverForm.confirmPassword) {
       alert('Passwords do not match');
+      return;
+    }
+
+    // Validate password requirements
+    const passwordValidation = validatePassword(driverForm.password, DEFAULT_PASSWORD_OPTIONS);
+    if (!passwordValidation.isValid) {
+      const requirements = getPasswordRequirements(DEFAULT_PASSWORD_OPTIONS);
+      alert(`Password does not meet requirements:\n\n${passwordValidation.errors.join('\n')}\n\nRequirements: ${requirements}`);
       return;
     }
 
@@ -727,6 +736,9 @@ const UserManagement = () => {
                     onChange={(e) => setDriverForm({...driverForm, password: e.target.value})}
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   />
+                  <p className="mt-1 text-xs text-gray-500">
+                    {getPasswordRequirements(DEFAULT_PASSWORD_OPTIONS)}
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Confirm Password</label>

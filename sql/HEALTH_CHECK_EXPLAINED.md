@@ -179,3 +179,4 @@ ORDER BY b.last_location_update DESC NULLS LAST;
 
 This will show you exactly which buses are missing location updates and how old their last update was.
 
+

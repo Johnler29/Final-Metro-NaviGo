@@ -13,8 +13,6 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useSupabase } from '../contexts/SupabaseContext';
-import { useDrawer } from '../contexts/DrawerContext';
-import AnimatedHamburgerButton from '../components/AnimatedHamburgerButton';
 import SetAlarmModal from '../components/SetAlarmModal';
 import { colors, spacing, radius, shadows, cardStyles } from '../styles/uiTheme';
 
@@ -96,8 +94,6 @@ export default function HomeScreen({ navigation }) {
     refreshData 
   } = useSupabase();
 
-  // Get drawer context
-  const { drawerVisible, openDrawer, closeDrawer } = useDrawer();
 
   const handleServicePress = (service) => {
     if (service.title === 'Set an Alarm') {
@@ -120,13 +116,6 @@ export default function HomeScreen({ navigation }) {
     navigation.navigate('Profile');
   };
 
-  const handleMenuPress = () => {
-    if (drawerVisible) {
-      closeDrawer();
-    } else {
-      openDrawer();
-    }
-  };
 
   // Request location permission and get current location
   const getCurrentLocation = async () => {
@@ -313,11 +302,6 @@ export default function HomeScreen({ navigation }) {
       {/* Header */}
       <View style={styles.headerContainer}>
         <View style={styles.headerRow}>
-          <AnimatedHamburgerButton
-            isOpen={drawerVisible}
-            onToggle={handleMenuPress}
-          />
-
           <View style={styles.locationPill}>
             <View style={styles.locationStatusDot} />
             <View style={styles.locationPillContent}>

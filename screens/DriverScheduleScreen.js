@@ -115,7 +115,7 @@ export default function DriverScheduleScreen({ navigation }) {
   };
 
   const handleMenuPress = () => {
-    navigation.getParent()?.openDrawer();
+    // Drawer removed
   };
 
   const handleRoleSwitch = () => {

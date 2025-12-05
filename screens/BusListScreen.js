@@ -127,9 +127,6 @@ export default function BusListScreen({ navigation, route }) {
     }
   };
 
-  const handleMenuPress = () => {
-    navigation.getParent()?.openDrawer();
-  };
 
   const handleBusPress = (bus) => {
     console.log('🚌 BusListScreen - Selected bus:', bus);
@@ -346,9 +343,7 @@ export default function BusListScreen({ navigation, route }) {
               <Ionicons name="arrow-back-outline" size={22} color="#fff" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Available buses</Text>
-            <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-              <Ionicons name="menu-outline" size={22} color="#fff" />
-            </TouchableOpacity>
+            <View style={styles.placeholder} />
           </View>
         </View>
         <View style={styles.loadingContainer}>
@@ -368,9 +363,7 @@ export default function BusListScreen({ navigation, route }) {
               <Ionicons name="arrow-back-outline" size={22} color="#fff" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Available buses</Text>
-            <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-              <Ionicons name="menu-outline" size={22} color="#fff" />
-            </TouchableOpacity>
+            <View style={styles.placeholder} />
           </View>
         </View>
         <View style={styles.errorContainer}>
@@ -402,9 +395,7 @@ export default function BusListScreen({ navigation, route }) {
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>Available buses</Text>
           </View>
-          <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-            <Ionicons name="menu-outline" size={22} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.placeholder} />
         </View>
       </View>
 
@@ -496,13 +487,9 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     letterSpacing: -0.8,
   },
-  menuButton: {
+  placeholder: {
     width: 40,
     height: 40,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   filtersContainer: {
     paddingHorizontal: spacing.lg,

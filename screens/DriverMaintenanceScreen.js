@@ -206,7 +206,7 @@ export default function DriverMaintenanceScreen({ navigation }) {
   };
 
   const handleMenuPress = () => {
-    navigation.getParent()?.openDrawer();
+    // Drawer removed
   };
 
   const filteredAlerts = maintenanceAlerts.sort((a, b) => {

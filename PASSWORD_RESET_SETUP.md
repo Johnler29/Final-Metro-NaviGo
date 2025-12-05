@@ -42,3 +42,4 @@ If you want the link to open the app directly, you'll need to:
 For now, the Supabase callback URL approach is simpler and works reliably.
 
 
+
