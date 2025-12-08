@@ -37,3 +37,5 @@ WHERE NOT EXISTS (
     WHERE proname IN ('queue_account_welcome_email', 'view_account_email_queue', 'archive_processed_email')
 );
 
+
+

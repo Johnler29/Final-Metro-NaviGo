@@ -208,3 +208,5 @@ END $$;
 -- To remove the setup, run the separate cleanup script:
 -- See: sql/cleanup-account-email-cron.sql
 
+
+

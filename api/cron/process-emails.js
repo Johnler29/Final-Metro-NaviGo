@@ -28,34 +28,172 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 /**
- * Send email using your email service
- * TODO: Replace with your actual email service (Resend, SendGrid, etc.)
+ * Send email using Resend
  */
 async function sendWelcomeEmail(email, name, userId) {
-  // Example using Resend
-  // npm install resend
-  /*
+  if (!emailApiKey) {
+    throw new Error('EMAIL_SERVICE_API_KEY not configured');
+  }
+
   const { Resend } = require('resend');
   const resend = new Resend(emailApiKey);
-  
+
+  // HTML email template
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Welcome to NaviGO</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          max-width: 600px;
+          margin: 0 auto;
+          padding: 20px;
+          background-color: #f4f4f4;
+        }
+        .container {
+          background-color: #ffffff;
+          border-radius: 8px;
+          padding: 40px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+          text-align: center;
+          margin-bottom: 30px;
+        }
+        .logo {
+          font-size: 32px;
+          font-weight: bold;
+          color: #2563eb;
+          margin-bottom: 10px;
+        }
+        h1 {
+          color: #1f2937;
+          margin-top: 0;
+        }
+        .content {
+          margin: 30px 0;
+        }
+        .button {
+          display: inline-block;
+          padding: 12px 24px;
+          background-color: #2563eb;
+          color: #ffffff;
+          text-decoration: none;
+          border-radius: 6px;
+          margin: 20px 0;
+          font-weight: 600;
+        }
+        .footer {
+          margin-top: 40px;
+          padding-top: 20px;
+          border-top: 1px solid #e5e7eb;
+          font-size: 14px;
+          color: #6b7280;
+          text-align: center;
+        }
+        .features {
+          margin: 30px 0;
+        }
+        .feature-item {
+          padding: 10px 0;
+          border-left: 3px solid #2563eb;
+          padding-left: 15px;
+          margin: 10px 0;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div class="logo">🚌 NaviGO</div>
+          <h1>Welcome, ${name || 'User'}!</h1>
+        </div>
+        
+        <div class="content">
+          <p>Thank you for creating an account with NaviGO! We're excited to have you on board.</p>
+          
+          <p>Your account has been successfully created and you can now:</p>
+          
+          <div class="features">
+            <div class="feature-item">
+              <strong>Track Buses in Real-Time</strong><br>
+              See live bus locations and get accurate arrival times
+            </div>
+            <div class="feature-item">
+              <strong>Plan Your Route</strong><br>
+              Find the best routes and stops for your journey
+            </div>
+            <div class="feature-item">
+              <strong>Get Notifications</strong><br>
+              Receive alerts about your bus arrivals and route changes
+            </div>
+          </div>
+          
+          <p>If you have any questions or need help, please don't hesitate to contact our support team.</p>
+        </div>
+        
+        <div class="footer">
+          <p>Best regards,<br><strong>The NaviGO Team</strong></p>
+          <p style="margin-top: 20px; font-size: 12px;">
+            This email was sent to ${email} because you created an account with NaviGO.<br>
+            If you didn't create this account, please contact support.
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  // Plain text version
+  const textContent = `
+Welcome to NaviGO!
+
+Hi ${name || 'User'},
+
+Thank you for creating an account with NaviGO! We're excited to have you on board.
+
+Your account has been successfully created and you can now:
+
+• Track Buses in Real-Time
+  See live bus locations and get accurate arrival times
+
+• Plan Your Route
+  Find the best routes and stops for your journey
+
+• Get Notifications
+  Receive alerts about your bus arrivals and route changes
+
+If you have any questions or need help, please don't hesitate to contact our support team.
+
+Best regards,
+The NaviGO Team
+
+---
+This email was sent to ${email} because you created an account with NaviGO.
+If you didn't create this account, please contact support.
+  `;
+
   const { data, error } = await resend.emails.send({
     from: emailFrom,
     to: email,
     subject: 'Welcome to NaviGO!',
-    html: `
-      <h1>Welcome ${name}!</h1>
-      <p>Thank you for creating an account with NaviGO.</p>
-      <p>Your account has been successfully created.</p>
-    `,
+    html: htmlContent,
+    text: textContent,
   });
-  
-  if (error) throw new Error(`Email error: ${error.message}`);
-  return data;
-  */
 
-  // For now, log (replace with actual email service)
-  console.log(`[EMAIL] Would send welcome email to ${email} (${name})`);
-  return { success: true, messageId: 'mock-' + Date.now() };
+  if (error) {
+    console.error('Resend API error:', error);
+    throw new Error(`Email service error: ${error.message}`);
+  }
+
+  console.log(`✅ Email sent successfully to ${email} (ID: ${data?.id})`);
+  return data;
 }
 
 /**
@@ -178,3 +316,4 @@ module.exports = async (req, res) => {
     });
   }
 };
+

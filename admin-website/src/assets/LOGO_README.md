@@ -71,3 +71,5 @@ All logos are provided in SVG format for:
 - Crisp rendering on all displays
 - Easy customization via CSS
 
+
+

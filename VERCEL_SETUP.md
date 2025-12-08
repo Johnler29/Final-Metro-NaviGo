@@ -291,3 +291,6 @@ Your account email system is now set up on Vercel! Every new user signup will:
 2. Queue an email in `account_emails` queue
 3. Be processed by the Supabase cron job
 4. Send a welcome email via your email service
+
+
+

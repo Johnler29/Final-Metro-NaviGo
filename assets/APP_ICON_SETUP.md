@@ -139,3 +139,5 @@ After generating icons:
 
 - [Expo App Icons Documentation](https://docs.expo.dev/guides/app-icons/)
 - [Android Adaptive Icons Guide](https://developer.android.com/guide/practices/ui_guidelines/icon_design_adaptive)
+
+

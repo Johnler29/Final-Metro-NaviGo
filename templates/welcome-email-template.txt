@@ -26,3 +26,5 @@ The NaviGO Team
 This email was sent to {{email}} because you created an account with NaviGO.
 If you didn't create this account, please contact support.
 
+
+

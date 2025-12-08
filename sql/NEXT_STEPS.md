@@ -233,3 +233,5 @@ Once all steps are complete, every new user signup will automatically:
 3. Be processed by the cron job
 4. Send a welcome email via your email service
 
+
+

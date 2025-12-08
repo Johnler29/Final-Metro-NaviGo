@@ -106,3 +106,5 @@ This will regenerate all PNG files from the SVG sources.
 ---
 
 **Your Navi-GO app is now ready with the new logo! 🎉**
+
+
