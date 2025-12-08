@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,59 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import NotificationModal from '../components/NotificationModal';
 
 export default function SettingsScreen({ navigation }) {
+  const [modalState, setModalState] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    icon: null,
+    type: 'info',
+  });
 
   const handleBackPress = () => {
     navigation.goBack();
+  };
+
+  const handlePushNotifications = () => {
+    setModalState({
+      visible: true,
+      title: 'Push Notifications',
+      message: 'Push notifications are currently enabled. You will receive alerts about bus arrivals, route updates, and important announcements.',
+      icon: 'notifications',
+      type: 'info',
+    });
+  };
+
+  const handleLocationServices = () => {
+    setModalState({
+      visible: true,
+      title: 'Location Services',
+      message: 'Location services are enabled. This allows the app to show your current location on the map and provide accurate bus arrival times based on your position.',
+      icon: 'location',
+      type: 'info',
+    });
+  };
+
+  const handleLanguage = () => {
+    setModalState({
+      visible: true,
+      title: 'Language',
+      message: 'The app is currently set to English. Language selection feature will be available in a future update.',
+      icon: 'language',
+      type: 'info',
+    });
+  };
+
+  const closeModal = () => {
+    setModalState({
+      visible: false,
+      title: '',
+      message: '',
+      icon: null,
+      type: 'info',
+    });
   };
 
   return (
@@ -33,27 +81,21 @@ export default function SettingsScreen({ navigation }) {
         {/* App Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>App Settings</Text>
-          <View style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handlePushNotifications}>
             <Ionicons name="notifications" size={24} color="#666" />
             <Text style={styles.settingText}>Push Notifications</Text>
-            <TouchableOpacity>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.settingItem}>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.settingItem} onPress={handleLocationServices}>
             <Ionicons name="location" size={24} color="#666" />
             <Text style={styles.settingText}>Location Services</Text>
-            <TouchableOpacity>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.settingItem}>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.settingItem} onPress={handleLanguage}>
             <Ionicons name="language" size={24} color="#666" />
             <Text style={styles.settingText}>Language</Text>
-            <TouchableOpacity>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
-            </TouchableOpacity>
-          </View>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
         </View>
 
         {/* About */}
@@ -68,6 +110,16 @@ export default function SettingsScreen({ navigation }) {
           </View>
         </View>
       </ScrollView>
+
+      {/* Settings Modal */}
+      <NotificationModal
+        visible={modalState.visible}
+        title={modalState.title}
+        message={modalState.message}
+        icon={modalState.icon}
+        type={modalState.type}
+        onPress={closeModal}
+      />
     </View>
   );
 }

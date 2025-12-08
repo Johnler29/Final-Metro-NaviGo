@@ -39,6 +39,9 @@ export default function MapScreen({ navigation, route }) {
   const [selectedRoute, setSelectedRoute] = useState(null);
   // Ping modal state
   const [showPingModal, setShowPingModal] = useState(false);
+  // Latest ping status for the passenger
+  const [latestPingStatus, setLatestPingStatus] = useState(null);
+  const PING_BANNER_TTL_MS = 5 * 60 * 1000; // 5 minutes
   
   // Keep selected bus in sync when navigating with params
   useEffect(() => {
@@ -108,6 +111,72 @@ export default function MapScreen({ navigation, route }) {
       loadBuses();
     }
   }, [buses, routes]);
+
+  // Clear passenger ping status if all buses go offline (no active buses shown)
+  useEffect(() => {
+    if (mapBuses.length === 0) {
+      setLatestPingStatus(null);
+    }
+  }, [mapBuses]);
+
+  // Auto-hide passenger ping status after TTL
+  useEffect(() => {
+    if (!latestPingStatus) return;
+    const timer = setTimeout(() => setLatestPingStatus(null), PING_BANNER_TTL_MS);
+    return () => clearTimeout(timer);
+  }, [latestPingStatus]);
+
+  // Subscribe to passenger ping status updates (so passengers see when drivers acknowledge/complete)
+  useEffect(() => {
+    let channel = null;
+    let isMounted = true;
+
+    const loadPassengerPings = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Initial fetch of latest ping for this user
+        const result = await supabaseHelpers.getUserPingNotifications();
+        if (isMounted && result.success && Array.isArray(result.data) && result.data.length > 0) {
+          const sorted = [...result.data].sort(
+            (a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at)
+          );
+          setLatestPingStatus(sorted[0]);
+        }
+
+        // Subscribe to real-time changes for this user's pings
+        channel = supabase
+          .channel(`passenger-pings-${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'ping_notifications',
+              filter: `user_id=eq.${user.id}`,
+            },
+            (payload) => {
+              const ping = payload.new || payload.old;
+              if (!ping) return;
+              setLatestPingStatus(ping);
+            }
+          )
+          .subscribe();
+      } catch (error) {
+        console.error('❌ Error loading passenger ping status:', error);
+      }
+    };
+
+    loadPassengerPings();
+
+    return () => {
+      isMounted = false;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, []);
 
   // Immediate real-time check when buses array changes (primary check)
   useEffect(() => {
@@ -826,6 +895,33 @@ export default function MapScreen({ navigation, route }) {
         
         return (
           <View style={styles.infoCard}>
+            {latestPingStatus && (() => {
+              const timestamp = new Date(latestPingStatus.updated_at || latestPingStatus.created_at || Date.now()).getTime();
+              const isRecent = Date.now() - timestamp < PING_BANNER_TTL_MS;
+              if (!isRecent) return null;
+              return (
+              <View style={styles.pingStatusBanner}>
+                <View style={[styles.statusDot, { backgroundColor: '#3B82F6' }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pingStatusTitle}>
+                    {latestPingStatus.status === 'acknowledged'
+                      ? 'Driver acknowledged your pickup request'
+                      : latestPingStatus.status === 'completed'
+                      ? 'Driver marked your request as completed'
+                      : latestPingStatus.status === 'pending'
+                      ? 'Waiting for driver to respond'
+                      : 'Ping update'}
+                  </Text>
+                  <Text style={styles.pingStatusSubtitle}>
+                    {latestPingStatus.created_at
+                      ? new Date(latestPingStatus.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : ''}
+                  </Text>
+                </View>
+              </View>
+              );
+            })()}
+
             <View style={styles.infoHeader}>
               <View style={styles.infoHeaderLeft}>
                 <Text style={styles.infoText}>
@@ -1153,6 +1249,26 @@ const styles = StyleSheet.create({
   },
   infoHeaderLeft: {
     flex: 1,
+  },
+  pingStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+    gap: 10,
+  },
+  pingStatusTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E3A8A',
+  },
+  pingStatusSubtitle: {
+    fontSize: 12,
+    color: '#4B5563',
   },
   infoText: { 
     fontSize: 14, 

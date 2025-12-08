@@ -162,7 +162,16 @@ export default function ProfileScreen({ navigation }) {
       title: 'About',
       icon: 'information-circle-outline',
       color: colors.textSecondary,
-      onPress: () => Alert.alert('About', 'NaviGO v1.0.0\nPublic Transit App'),
+      onPress: () => {
+        setNotificationModal({
+          visible: true,
+          title: 'About',
+          message: 'NaviGO v1.0.0\nPublic Transit App',
+          buttons: null,
+          type: 'info',
+          icon: 'information-circle',
+        });
+      },
     },
   ];
 

@@ -19,6 +19,8 @@ export default function BusListScreen({ navigation, route }) {
   const [selectedFilter, setSelectedFilter] = useState(route.params?.filter || 'all');
   const [busCapacityStatus, setBusCapacityStatus] = useState({});
   const [realtimeBuses, setRealtimeBuses] = useState([]);
+  const [showDebug, setShowDebug] = useState(false);
+  const [realtimeUpdateCount, setRealtimeUpdateCount] = useState(0);
 
   // Get data from Supabase context
   const { 
@@ -88,14 +90,38 @@ export default function BusListScreen({ navigation, route }) {
           event: 'UPDATE',
           schema: 'public',
           table: 'buses',
-          filter: `status=eq.active`
+          // Removed status filter so every bus update (including PWD changes)
+          // reaches the list. Some rows may not have status=active yet when
+          // capacity is updated, which prevented realtime updates from firing.
         },
         (payload) => {
           console.log('📡 Real-time bus update received:', payload);
+          console.log('📡 PWD seats data:', {
+            current_pwd_passengers: payload.new?.current_pwd_passengers,
+            pwd_seats_available: payload.new?.pwd_seats_available,
+            pwd_seats: payload.new?.pwd_seats
+          });
+          
+          // Increment update counter to show subscription is working
+          setRealtimeUpdateCount(prev => prev + 1);
           
           // Update capacity status for the specific bus
           if (payload.new) {
             const updatedBus = payload.new;
+            const pwdSeats = updatedBus.pwd_seats || 4;
+            const currentPwdPassengers = updatedBus.current_pwd_passengers || 0;
+            const calculatedPwdSeatsAvailable = Math.max(0, pwdSeats - currentPwdPassengers);
+            const pwdSeatsAvailable = updatedBus.pwd_seats_available !== undefined 
+              ? updatedBus.pwd_seats_available 
+              : calculatedPwdSeatsAvailable;
+            
+            console.log('📡 Updating bus capacity status:', {
+              busId: updatedBus.id,
+              pwdSeatsAvailable,
+              currentPwdPassengers,
+              pwdSeats
+            });
+            
             setBusCapacityStatus(prev => ({
               ...prev,
               [updatedBus.id]: {
@@ -103,33 +129,51 @@ export default function BusListScreen({ navigation, route }) {
                 current_passengers: updatedBus.current_passengers || 0,
                 capacity_percentage: updatedBus.capacity_percentage || 0,
                 max_capacity: updatedBus.capacity || 50,
-                current_pwd_passengers: updatedBus.current_pwd_passengers || 0,
-                pwd_seats_available: updatedBus.pwd_seats_available !== undefined 
-                  ? updatedBus.pwd_seats_available 
-                  : (updatedBus.pwd_seats || 4) - (updatedBus.current_pwd_passengers || 0),
-                pwd_seats: updatedBus.pwd_seats || 4,
+                current_pwd_passengers: currentPwdPassengers,
+                pwd_seats_available: pwdSeatsAvailable,
+                pwd_seats: pwdSeats,
               }
             }));
 
             // Also update realtimeBuses if the bus is in the list
+            // Reuse the variables already declared above
             setRealtimeBuses(prev => {
-              const existingIndex = prev.findIndex(b => (b.bus_id || b.id) === updatedBus.id);
+              const existingIndex = prev.findIndex(b => {
+                const busId = b.bus_id || b.id;
+                return busId === updatedBus.id;
+              });
               if (existingIndex >= 0) {
                 const updated = [...prev];
                 updated[existingIndex] = {
                   ...updated[existingIndex],
                   capacity_percentage: updatedBus.capacity_percentage,
                   current_passengers: updatedBus.current_passengers,
-                  current_pwd_passengers: updatedBus.current_pwd_passengers,
-                  pwd_seats_available: updatedBus.pwd_seats_available !== undefined 
-                    ? updatedBus.pwd_seats_available 
-                    : (updatedBus.pwd_seats || 4) - (updatedBus.current_pwd_passengers || 0),
-                  pwd_seats: updatedBus.pwd_seats || 4,
+                  current_pwd_passengers: currentPwdPassengers,
+                  pwd_seats_available: pwdSeatsAvailable,
+                  pwd_seats: pwdSeats,
                 };
+                console.log('📡 Updated realtimeBuses entry:', updated[existingIndex]);
                 return updated;
               }
-              return prev;
+              // If bus not found in realtimeBuses, add it (don't check status - we want all updates)
+              const newBus = {
+                bus_id: updatedBus.id,
+                id: updatedBus.id,
+                capacity_percentage: updatedBus.capacity_percentage,
+                current_passengers: updatedBus.current_passengers,
+                current_pwd_passengers: currentPwdPassengers,
+                pwd_seats_available: pwdSeatsAvailable,
+                pwd_seats: pwdSeats,
+              };
+              console.log('📡 Adding/updating bus in realtimeBuses:', newBus);
+              return [...prev, newBus];
             });
+            
+            // Force reload realtime buses to ensure we have latest data
+            // This is a fallback in case the realtime subscription misses something
+            setTimeout(() => {
+              loadRealtimeBuses();
+            }, 500);
 
           }
         }
@@ -251,7 +295,10 @@ export default function BusListScreen({ navigation, route }) {
     
     // Use real-time data if available, otherwise fall back to regular data
     const isRealtime = realtimeBuses.length > 0;
-    const busData = isRealtime ? realtimeBuses.find(rb => rb.bus_id === bus.id) || bus : bus;
+    const busData = isRealtime ? realtimeBuses.find(rb => {
+      const rbId = rb.bus_id || rb.id;
+      return rbId === bus.id;
+    }) || bus : bus;
     
     const locationStatus = getLocationStatus(busData.last_location_update || bus.updated_at);
     const capacityStatus = getCapacityStatus(busData.capacity_percentage || bus.capacity_percentage || 0);
@@ -270,20 +317,49 @@ export default function BusListScreen({ navigation, route }) {
       pwdSeats: busData.pwd_seats || capacityData?.pwd_seats || bus.pwd_seats || 4,
       pwdSeatsAvailable: (() => {
         // Priority: busData > capacityData > bus > calculated
-        if (busData.pwd_seats_available !== undefined) {
+        if (busData.pwd_seats_available !== undefined && busData.pwd_seats_available !== null) {
+          console.log('📊 Using busData.pwd_seats_available:', busData.pwd_seats_available, 'for bus:', bus.id);
           return busData.pwd_seats_available;
         }
-        if (capacityData?.pwd_seats_available !== undefined) {
+        if (capacityData?.pwd_seats_available !== undefined && capacityData?.pwd_seats_available !== null) {
+          console.log('📊 Using capacityData.pwd_seats_available:', capacityData.pwd_seats_available, 'for bus:', bus.id);
           return capacityData.pwd_seats_available;
         }
-        if (bus.pwd_seats_available !== undefined) {
+        if (bus.pwd_seats_available !== undefined && bus.pwd_seats_available !== null) {
+          console.log('📊 Using bus.pwd_seats_available:', bus.pwd_seats_available, 'for bus:', bus.id);
           return bus.pwd_seats_available;
         }
         // Calculate from available data
         const totalPwdSeats = busData.pwd_seats || capacityData?.pwd_seats || bus.pwd_seats || 4;
         const currentPwd = busData.current_pwd_passengers || capacityData?.current_pwd_passengers || bus.current_pwd_passengers || 0;
-        return Math.max(0, totalPwdSeats - currentPwd);
+        const calculated = Math.max(0, totalPwdSeats - currentPwd);
+        console.log('📊 Calculated pwd_seats_available:', calculated, 'for bus:', bus.id, '(total:', totalPwdSeats, 'current:', currentPwd, ')');
+        return calculated;
       })(),
+      pwdDebugSource: (() => {
+        if (busData.pwd_seats_available !== undefined && busData.pwd_seats_available !== null) return 'realtime.busData';
+        if (capacityData?.pwd_seats_available !== undefined && capacityData?.pwd_seats_available !== null) return 'capacityData';
+        if (bus.pwd_seats_available !== undefined && bus.pwd_seats_available !== null) return 'busRow';
+        return 'calculated';
+      })(),
+      // Debug: Store raw values from all sources
+      pwdDebugValues: {
+        realtimeBusData: {
+          pwd_seats_available: busData.pwd_seats_available,
+          current_pwd_passengers: busData.current_pwd_passengers,
+          pwd_seats: busData.pwd_seats,
+        },
+        capacityData: {
+          pwd_seats_available: capacityData?.pwd_seats_available,
+          current_pwd_passengers: capacityData?.current_pwd_passengers,
+          pwd_seats: capacityData?.pwd_seats,
+        },
+        busRow: {
+          pwd_seats_available: bus.pwd_seats_available,
+          current_pwd_passengers: bus.current_pwd_passengers,
+          pwd_seats: bus.pwd_seats,
+        },
+      },
       eta: bus.estimated_arrival || '5 min',
       distance: bus.distance || '2.3 km',
       latitude: busData.latitude || bus.latitude || 37.78825,
@@ -337,8 +413,12 @@ export default function BusListScreen({ navigation, route }) {
             <Text style={styles.busDirection}>{item.origin} → {item.destination}</Text>
           </View>
           <View style={styles.statusContainer}>
-            <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
-            <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+            {getStatusText(item.status) !== 'Unknown' && (
+              <>
+                <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
+                <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+              </>
+            )}
             <View style={[styles.capacityIndicator, { backgroundColor: capacityColor }]}>
               <Text style={styles.capacityIndicatorText}>{capacityPercentage}%</Text>
             </View>
@@ -394,6 +474,19 @@ export default function BusListScreen({ navigation, route }) {
                 PWD Seats: {pwdStatus.text}
             </Text>
           </View>
+          {showDebug && (
+            <View style={styles.debugRow}>
+              <Text style={styles.debugText}>
+                Updates: {realtimeUpdateCount} | src={item.pwdDebugSource} | avail={item.pwdSeatsAvailable} / {item.pwdSeats}
+              </Text>
+              <Text style={styles.debugText}>
+                realtime: {item.pwdDebugValues.realtimeBusData.pwd_seats_available ?? 'null'} | cap: {item.pwdDebugValues.capacityData.pwd_seats_available ?? 'null'} | bus: {item.pwdDebugValues.busRow.pwd_seats_available ?? 'null'}
+              </Text>
+              <Text style={styles.debugText}>
+                pwd_passengers: rt={item.pwdDebugValues.realtimeBusData.current_pwd_passengers ?? 'null'} | cap={item.pwdDebugValues.capacityData.current_pwd_passengers ?? 'null'} | bus={item.pwdDebugValues.busRow.current_pwd_passengers ?? 'null'}
+              </Text>
+            </View>
+          )}
           </View>
         </View>
       </TouchableOpacity>
@@ -425,8 +518,10 @@ export default function BusListScreen({ navigation, route }) {
             <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
               <Ionicons name="arrow-back-outline" size={22} color="#fff" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Available buses</Text>
-            <View style={styles.placeholder} />
+          <Text style={styles.headerTitle}>Available buses</Text>
+          <TouchableOpacity style={styles.debugButton} onPress={() => setShowDebug(prev => !prev)}>
+            <Text style={styles.debugButtonText}>{showDebug ? 'Hide' : 'Debug'}</Text>
+          </TouchableOpacity>
           </View>
         </View>
         <View style={styles.loadingContainer}>
@@ -445,8 +540,10 @@ export default function BusListScreen({ navigation, route }) {
             <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
               <Ionicons name="arrow-back-outline" size={22} color="#fff" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Available buses</Text>
-            <View style={styles.placeholder} />
+          <Text style={styles.headerTitle}>Available buses</Text>
+          <TouchableOpacity style={styles.debugButton} onPress={() => setShowDebug(prev => !prev)}>
+            <Text style={styles.debugButtonText}>{showDebug ? 'Hide' : 'Debug'}</Text>
+          </TouchableOpacity>
           </View>
         </View>
         <View style={styles.errorContainer}>
@@ -478,7 +575,9 @@ export default function BusListScreen({ navigation, route }) {
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>Available buses</Text>
           </View>
-          <View style={styles.placeholder} />
+          <TouchableOpacity style={styles.debugButton} onPress={() => setShowDebug(prev => !prev)}>
+            <Text style={styles.debugButtonText}>{showDebug ? 'Hide' : 'Debug'}</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -486,10 +585,6 @@ export default function BusListScreen({ navigation, route }) {
       <View style={styles.filtersContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {renderFilterButton('all', 'All buses')}
-          {renderFilterButton('active', 'Active')}
-          {renderFilterButton('pwd', 'PWD accessible')}
-          {renderFilterButton('nearby', 'Nearby')}
-          {renderFilterButton('low-capacity', 'Low capacity')}
         </ScrollView>
       </View>
 
@@ -562,6 +657,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.16)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  debugButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  debugButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   headerTitle: {
     color: '#fff',
@@ -733,6 +841,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     ...shadows.card,
+  },
+  debugRow: {
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  debugText: {
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   pwdText: {
     fontSize: 15,

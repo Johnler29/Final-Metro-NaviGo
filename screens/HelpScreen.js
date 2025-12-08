@@ -1,37 +1,77 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import NotificationModal from '../components/NotificationModal';
 
 export default function HelpScreen({ navigation }) {
+  const [modalState, setModalState] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    icon: null,
+    type: 'info',
+  });
+
   const helpItems = [
     {
       title: 'How to track buses',
       icon: 'bus',
-      action: () => Alert.alert('Track Buses', 'Use the map screen to see real-time bus locations. Tap on a bus marker for more details.'),
+      modalTitle: 'Track Buses',
+      modalMessage: 'Use the map screen to see real-time bus locations. Tap on a bus marker for more details.',
+      modalIcon: 'bus',
+      type: 'info',
     },
     {
       title: 'Find routes',
       icon: 'search',
-      action: () => Alert.alert('Find Routes', 'Use the Route Search screen to find bus routes between locations.'),
+      modalTitle: 'Find Routes',
+      modalMessage: 'Use the Route Search screen to find bus routes between locations.',
+      modalIcon: 'search',
+      type: 'info',
     },
     {
       title: 'Switch to bus conductor mode',
       icon: 'car',
-      action: () => Alert.alert('Bus Conductor Mode', 'Use the menu drawer to switch between passenger and bus conductor modes.'),
+      modalTitle: 'Bus Conductor Mode',
+      modalMessage: 'Use the menu drawer to switch between passenger and bus conductor modes.',
+      modalIcon: 'car',
+      type: 'info',
     },
     {
       title: 'Contact support',
       icon: 'call',
-      action: () => Alert.alert('Contact Support', 'Email: support@metronavigo.com\nPhone: +1-234-567-8900'),
+      modalTitle: 'Contact Support',
+      modalMessage: 'Email: support@metronavigo.com\nPhone: +1-234-567-8900',
+      modalIcon: 'call',
+      type: 'info',
     },
   ];
+
+  const handleHelpItemPress = (item) => {
+    setModalState({
+      visible: true,
+      title: item.modalTitle,
+      message: item.modalMessage,
+      icon: item.modalIcon,
+      type: item.type,
+    });
+  };
+
+  const closeModal = () => {
+    setModalState({
+      visible: false,
+      title: '',
+      message: '',
+      icon: null,
+      type: 'info',
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -55,7 +95,7 @@ export default function HelpScreen({ navigation }) {
           <TouchableOpacity
             key={index}
             style={styles.helpItem}
-            onPress={item.action}
+            onPress={() => handleHelpItemPress(item)}
           >
             <View style={styles.helpContent}>
               <Ionicons name={item.icon} size={24} color="#f59e0b" />
@@ -65,6 +105,16 @@ export default function HelpScreen({ navigation }) {
           </TouchableOpacity>
         ))}
       </ScrollView>
+
+      {/* Help Modal */}
+      <NotificationModal
+        visible={modalState.visible}
+        title={modalState.title}
+        message={modalState.message}
+        icon={modalState.icon}
+        type={modalState.type}
+        onPress={closeModal}
+      />
     </View>
   );
 }

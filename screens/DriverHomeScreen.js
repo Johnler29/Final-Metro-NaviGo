@@ -1057,42 +1057,64 @@ export default function DriverHomeScreen({ navigation }) {
     }
 
     try {
-      console.log('🔄 Updating capacity for bus:', busId, 'to', capacityPercentage + '%', 'PWD:', pwdPassengers);
-      const result = await updateBusCapacityStatus(busId, capacityPercentage, pwdPassengers);
-      
-      if (result) {
-        setCurrentCapacity(capacityPercentage);
-        // Get max capacity from result (supports both 'capacity' and 'max_capacity' for compatibility)
-        const maxCapacity = result.max_capacity || result.capacity || currentBus?.max_capacity || currentBus?.capacity || 50;
-        const currentPassengers = Math.round((capacityPercentage / 100) * maxCapacity);
-        
-        // Update the bus in the local state
-        const updatedBus = buses.find(bus => bus.id === busId);
-        if (updatedBus) {
-          updatedBus.capacity_percentage = capacityPercentage;
-          updatedBus.current_passengers = currentPassengers;
-          if (pwdPassengers !== undefined) {
-            updatedBus.current_pwd_passengers = pwdPassengers;
-            updatedBus.pwd_seats_available = (updatedBus.pwd_seats || 4) - pwdPassengers;
-          }
-        }
-        
-        // CRITICAL: Update currentBus state so the modal shows the correct value when reopened
-        if (currentBus && currentBus.id === busId) {
-          setCurrentBus({
-            ...currentBus,
-            capacity_percentage: capacityPercentage,
-            current_passengers: currentPassengers,
-            current_pwd_passengers: pwdPassengers,
-            pwd_seats_available: (currentBus.pwd_seats || 4) - pwdPassengers,
-          });
-        }
-        
-        console.log('✅ Capacity updated successfully');
+      console.log('🔄 Updating capacity (direct) for bus:', busId, 'to', capacityPercentage + '%', 'PWD:', pwdPassengers);
+
+      // Compute derived values locally
+      const maxCapacity =
+        currentBus?.max_capacity ||
+        currentBus?.capacity ||
+        50;
+      const currentPassengers = Math.round((capacityPercentage / 100) * maxCapacity);
+      const pwdSeats = currentBus?.pwd_seats || 4;
+      const safePwdPassengers = Math.max(0, pwdPassengers || 0);
+      const pwdSeatsAvailable = Math.max(0, pwdSeats - safePwdPassengers);
+
+      // Perform a direct update on the buses table
+      const { data, error } = await supabase
+        .from('buses')
+        .update({
+          capacity_percentage: capacityPercentage,
+          current_passengers: currentPassengers,
+          current_pwd_passengers: safePwdPassengers,
+          pwd_seats_available: pwdSeatsAvailable,
+          pwd_seats: pwdSeats,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', busId)
+        .select('id, capacity_percentage, current_passengers, current_pwd_passengers, pwd_seats_available, pwd_seats, capacity')
+        .single();
+
+      if (error) {
+        console.error('❌ Direct capacity update failed:', error);
+        throw new Error(error.message || 'Failed to update bus capacity. Please try again.');
       }
+
+      console.log('✅ Direct capacity update success:', data);
+
+      // Update local state for UI
+      setCurrentCapacity(capacityPercentage);
+
+      const updatedBus = buses.find((bus) => bus.id === busId);
+      if (updatedBus) {
+        updatedBus.capacity_percentage = capacityPercentage;
+        updatedBus.current_passengers = currentPassengers;
+        updatedBus.current_pwd_passengers = safePwdPassengers;
+        updatedBus.pwd_seats_available = pwdSeatsAvailable;
+      }
+
+      if (currentBus && currentBus.id === busId) {
+        setCurrentBus({
+          ...currentBus,
+          capacity_percentage: capacityPercentage,
+          current_passengers: currentPassengers,
+          current_pwd_passengers: safePwdPassengers,
+          pwd_seats_available: pwdSeatsAvailable,
+        });
+      }
+
+      return data;
     } catch (error) {
       console.error('❌ Error updating capacity:', error);
-      // Re-throw with better error message
       const errorMessage = error?.message || 'Failed to update bus capacity. Please try again.';
       throw new Error(errorMessage);
     }
@@ -1622,29 +1644,6 @@ export default function DriverHomeScreen({ navigation }) {
                       >
                         <Ionicons name="checkmark-circle" size={20} color="#fff" />
                         <Text style={styles.pingActionButtonText}>Acknowledge</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={[styles.pingActionButton, styles.completeButton]}
-                        onPress={() => handleCompletePing(ping.id)}
-                        delayPressIn={0}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="checkmark-done-circle" size={20} color="#fff" />
-                        <Text style={styles.pingActionButtonText}>Complete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
-                  {ping.status === 'acknowledged' && (
-                    <View style={styles.pingActions}>
-                      <TouchableOpacity 
-                        style={[styles.pingActionButton, styles.completeButton, { flex: 1 }]}
-                        onPress={() => handleCompletePing(ping.id)}
-                        delayPressIn={0}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="checkmark-done-circle" size={20} color="#fff" />
-                        <Text style={styles.pingActionButtonText}>Mark Complete</Text>
                       </TouchableOpacity>
                     </View>
                   )}

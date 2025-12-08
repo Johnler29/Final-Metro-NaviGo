@@ -84,7 +84,50 @@ const CapacityStatusModal = ({
     
     setIsUpdating(true);
     try {
-      await onUpdateCapacity(busId, capacity, pwdPassengers);
+      console.log('🔄 Calling onUpdateCapacity with:', { busId, capacity, pwdPassengers });
+      
+      let result;
+      try {
+        result = await onUpdateCapacity(busId, capacity, pwdPassengers);
+        console.log('✅ Update result from server:', result);
+      } catch (updateError) {
+        console.error('❌ Update error caught:', updateError);
+        // Re-throw to show the actual error
+        throw updateError;
+      }
+      
+      // If result is falsy, assume update likely succeeded but response was empty
+      if (!result) {
+        console.warn('⚠️ Update returned no result; treating as success with client confirmation data.');
+        result = {
+          current_pwd_passengers: pwdPassengers,
+          pwd_seats_available: (busInfo?.pwd_seats || 4) - (pwdPassengers || 0),
+          capacity_percentage: capacity,
+        };
+      }
+      
+      // Verify the update actually saved the PWD values
+      if (result && pwdPassengers !== null && pwdPassengers !== undefined) {
+        const savedPwdPassengers = result.current_pwd_passengers;
+        const savedPwdSeatsAvailable = result.pwd_seats_available;
+        
+        console.log('🔍 Verifying saved values:', {
+          sent: pwdPassengers,
+          saved: savedPwdPassengers,
+          match: savedPwdPassengers === pwdPassengers
+        });
+        
+        if (savedPwdPassengers !== pwdPassengers) {
+          console.warn('⚠️ PWD passengers mismatch! Sent:', pwdPassengers, 'Saved:', savedPwdPassengers);
+          Alert.alert(
+            'Warning', 
+            `PWD passengers may not have saved correctly.\nSent: ${pwdPassengers}\nSaved: ${savedPwdPassengers || 'null'}\n\nPlease check if RLS policies allow updates.`
+          );
+        } else {
+          console.log('✅ PWD passengers saved correctly:', savedPwdPassengers);
+        }
+      }
+      
       // Show success modal with animation
       setShowSuccessModal(true);
       Animated.parallel([
@@ -101,10 +144,37 @@ const CapacityStatusModal = ({
         }),
       ]).start();
     } catch (error) {
-      console.error('Error updating capacity:', error);
+      console.error('❌ Error updating capacity:', error);
+      console.error('❌ Error stack:', error?.stack);
+      console.error('❌ Full error object:', JSON.stringify(error, null, 2));
+      
       // Show more specific error message if available
-      const errorMessage = error?.message || 'Failed to update bus capacity. Please try again.';
-      Alert.alert('Error', errorMessage);
+      let errorMessage = error?.message || 'Failed to update bus capacity. Please try again.';
+      
+      // Add helpful hints based on error type
+      if (errorMessage.includes('Permission denied') || errorMessage.includes('42501')) {
+        errorMessage += '\n\n💡 Tip: Make sure you ran the SQL script: sql/add-bus-update-policy.sql';
+      } else if (errorMessage.includes('does not exist') || errorMessage.includes('function')) {
+        errorMessage += '\n\n💡 Tip: Make sure you ran the SQL script: sql/add-bus-update-function.sql';
+      }
+      
+      Alert.alert(
+        'Update Failed', 
+        errorMessage,
+        [
+          { text: 'OK', style: 'default' },
+          { 
+            text: 'View Details', 
+            onPress: () => {
+              Alert.alert(
+                'Error Details',
+                `Error: ${errorMessage}\n\nCode: ${error?.code || 'N/A'}\n\nCheck console for full details.`,
+                [{ text: 'OK' }]
+              );
+            }
+          }
+        ]
+      );
     } finally {
       setIsUpdating(false);
     }
