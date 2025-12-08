@@ -12,15 +12,17 @@ const MetricCard = ({
   changeType 
 }) => {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 
-                  hover:shadow-md transition-all duration-200">
+    <div className="bg-white rounded-[22px] border border-gray-200 p-6 
+                  shadow-[0_2px_8px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]
+                  hover:shadow-[0_4px_12px_rgba(0,0,0,0.08),0_2px_4px_rgba(0,0,0,0.04)]
+                  hover:border-primary-500 transition-all duration-200">
       <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-gray-500 mb-2 uppercase tracking-wide">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">
             {title}
           </p>
           <div className="flex items-baseline mb-3">
-            <p className="text-3xl font-bold text-gray-900">
+            <p className="text-3xl font-bold text-gray-900 leading-tight">
               {value}
             </p>
             {total && (
@@ -42,7 +44,7 @@ const MetricCard = ({
             </div>
           )}
         </div>
-        <div className={`p-3 rounded-xl ${bgColor} shadow-sm`}>
+        <div className={`p-3 rounded-xl ${bgColor} shadow-sm flex-shrink-0 ml-4`}>
           <Icon className={`w-7 h-7 ${color}`} />
         </div>
       </div>

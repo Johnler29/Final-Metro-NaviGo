@@ -54,3 +54,9 @@ desktop.ini
 .expo/
 .expo-shared/
 .eas/
+
+# Temporary files
+**/c__Users_*
+**/*test-*.js
+**/*debug-*.js
+**/*diagnostic-*.js

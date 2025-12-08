@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { 
   Plus, 
@@ -30,6 +30,8 @@ const FleetManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedBus, setSelectedBus] = useState(null);
   const [showActions, setShowActions] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({});
+  const actionRefs = useRef({});
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'grid'
   const [sortBy, setSortBy] = useState('bus_number');
@@ -127,6 +129,32 @@ const FleetManagement = () => {
     }
   };
 
+  const calculateMenuPosition = (busId) => {
+    const buttonRef = actionRefs.current[busId];
+    if (!buttonRef) return 'bottom';
+    
+    const rect = buttonRef.getBoundingClientRect();
+    const menuHeight = 100; // Approximate menu height
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    
+    // If not enough space below but enough space above, show above
+    if (spaceBelow < menuHeight && spaceAbove > menuHeight) {
+      return 'top';
+    }
+    return 'bottom';
+  };
+
+  const handleToggleActions = (busId) => {
+    if (showActions === busId) {
+      setShowActions(null);
+    } else {
+      const position = calculateMenuPosition(busId);
+      setMenuPosition(prev => ({ ...prev, [busId]: position }));
+      setShowActions(busId);
+    }
+  };
+
   const getSystemStatus = (bus) => {
     // System-managed status based on driver assignment and recent activity
     const hasDriver = bus.driver_id && bus.driver_id !== '';
@@ -155,82 +183,91 @@ const FleetManagement = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 w-full max-w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Bus Management</h1>
-          <p className="text-gray-600">Manage your bus fleet and track real-time locations</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">Bus Management</h1>
+          <p className="text-sm md:text-base text-gray-600 mt-1">Manage your bus fleet and track real-time locations</p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 flex items-center space-x-2 disabled:opacity-50"
+            className="bg-white text-gray-700 px-3 md:px-4 py-2.5 md:py-2 rounded-lg border border-gray-200 hover:bg-gray-50 
+                     hover:border-primary-500 flex items-center justify-center space-x-2 disabled:opacity-50 transition-all duration-200
+                     text-sm md:text-base font-semibold flex-1 sm:flex-initial touch-manipulation min-h-[44px] sm:min-h-0"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
+            <RefreshCw className={`w-4 h-4 md:w-5 md:h-5 ${refreshing ? 'animate-spin' : ''}`} />
+            <span className="whitespace-nowrap">Refresh</span>
           </button>
           <button
             onClick={() => setShowModal(true)}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 flex items-center space-x-2"
+            className="bg-primary-500 text-white px-3 md:px-4 py-2.5 md:py-2 rounded-lg hover:bg-primary-600 
+                     flex items-center justify-center space-x-2 transition-all duration-200 text-sm md:text-base font-semibold
+                     shadow-[0_2px_4px_rgba(245,158,11,0.2)] hover:shadow-[0_4px_8px_rgba(245,158,11,0.3)] 
+                     flex-1 sm:flex-initial touch-manipulation min-h-[44px] sm:min-h-0"
           >
-            <Plus className="w-4 h-4" />
-            <span>Add Bus</span>
+            <Plus className="w-4 h-4 md:w-5 md:h-5" />
+            <span className="whitespace-nowrap">Add Bus</span>
           </button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-4 md:mb-6 relative z-0">
+        <div className="bg-white p-4 md:p-6 rounded-[22px] border border-gray-200
+                        shadow-[0_2px_8px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] relative">
           <div className="flex items-center">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <Bus className="w-6 h-6 text-blue-600" />
+            <div className="p-2 bg-blue-50 rounded-lg flex-shrink-0">
+              <Bus className="w-5 h-5 md:w-6 md:h-6 text-primary-600" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Buses</p>
-              <p className="text-2xl font-bold text-gray-900">{buses.length}</p>
+            <div className="ml-3 md:ml-4 min-w-0">
+              <p className="text-xs md:text-sm font-medium text-gray-600">Total Buses</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">{buses.length}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white p-4 md:p-6 rounded-[22px] border border-gray-200
+                        shadow-[0_2px_8px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]">
           <div className="flex items-center">
-            <div className="p-2 bg-green-50 rounded-lg">
-              <MapPin className="w-6 h-6 text-green-600" />
+            <div className="p-2 bg-green-50 rounded-lg flex-shrink-0">
+              <MapPin className="w-5 h-5 md:w-6 md:h-6 text-primary-600" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Active Buses</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="ml-3 md:ml-4 min-w-0">
+              <p className="text-xs md:text-sm font-medium text-gray-600">Active Buses</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">
                 {buses.filter(bus => bus.status === 'active').length}
               </p>
             </div>
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white p-4 md:p-6 rounded-[22px] border border-gray-200
+                        shadow-[0_2px_8px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]">
           <div className="flex items-center">
-            <div className="p-2 bg-yellow-50 rounded-lg">
-              <Wrench className="w-6 h-6 text-yellow-600" />
+            <div className="p-2 bg-amber-50 rounded-lg flex-shrink-0">
+              <Wrench className="w-5 h-5 md:w-6 md:h-6 text-primary-600" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">In Maintenance</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="ml-3 md:ml-4 min-w-0">
+              <p className="text-xs md:text-sm font-medium text-gray-600">In Maintenance</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">
                 {buses.filter(bus => bus.status === 'maintenance').length}
               </p>
             </div>
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white p-4 md:p-6 rounded-[22px] border border-gray-200
+                        shadow-[0_2px_8px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]">
           <div className="flex items-center">
-            <div className="p-2 bg-purple-50 rounded-lg">
-              <Users className="w-6 h-6 text-purple-600" />
+            <div className="p-2 bg-purple-50 rounded-lg flex-shrink-0">
+              <Users className="w-5 h-5 md:w-6 md:h-6 text-primary-600" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">With Drivers</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="ml-3 md:ml-4 min-w-0">
+              <p className="text-xs md:text-sm font-medium text-gray-600">With Drivers</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">
                 {buses.filter(bus => bus.driver_id).length}
               </p>
             </div>
@@ -239,27 +276,34 @@ const FleetManagement = () => {
       </div>
 
       {/* Filters and Controls */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1">
+      <div className="bg-white p-4 md:p-6 rounded-[22px] border border-gray-200
+                      shadow-[0_2px_8px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] relative z-10">
+        <div className="flex flex-col gap-4">
+          {/* Search Bar - Full Width */}
+          <div className="w-full">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
               <input
                 type="text"
-                placeholder="Search buses by number, name, or route..."
+                placeholder="Search buses..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full pl-10 md:pl-12 pr-4 py-2.5 md:py-3 border border-gray-300 rounded-lg 
+                         focus:ring-2 focus:ring-primary-500 focus:border-primary-500 
+                         transition-all duration-200 text-sm md:text-base"
               />
             </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="sm:w-48">
+          {/* Filters Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="w-full">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg 
+                         focus:ring-2 focus:ring-primary-500 focus:border-primary-500 
+                         transition-all duration-200 text-sm md:text-base"
               >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
@@ -268,11 +312,13 @@ const FleetManagement = () => {
               </select>
             </div>
             
-            <div className="sm:w-48">
+            <div className="w-full">
               <select
                 value={trackingFilter}
                 onChange={(e) => setTrackingFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg 
+                         focus:ring-2 focus:ring-primary-500 focus:border-primary-500 
+                         transition-all duration-200 text-sm md:text-base"
               >
                 <option value="all">All Tracking</option>
                 <option value="moving">Moving</option>
@@ -281,7 +327,7 @@ const FleetManagement = () => {
               </select>
             </div>
             
-            <div className="sm:w-48">
+            <div className="w-full">
               <select
                 value={`${sortBy}-${sortOrder}`}
                 onChange={(e) => {
@@ -289,7 +335,9 @@ const FleetManagement = () => {
                   setSortBy(column);
                   setSortOrder(order);
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg 
+                         focus:ring-2 focus:ring-primary-500 focus:border-primary-500 
+                         transition-all duration-200 text-sm md:text-base"
               >
                 <option value="bus_number-asc">Bus Number (A-Z)</option>
                 <option value="bus_number-desc">Bus Number (Z-A)</option>
@@ -302,18 +350,29 @@ const FleetManagement = () => {
               </select>
             </div>
             
-            <div className="flex items-center space-x-2">
+            {/* View Mode Toggle */}
+            <div className="flex items-center justify-end sm:justify-start gap-2">
               <button
                 onClick={() => setViewMode('table')}
-                className={`p-2 rounded-lg ${viewMode === 'table' ? 'bg-primary-100 text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
+                className={`p-2.5 md:p-3 rounded-lg transition-all duration-200 ${
+                  viewMode === 'table' 
+                    ? 'bg-primary-100 text-primary-600 border border-primary-200' 
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50 border border-transparent'
+                }`}
+                aria-label="Table view"
               >
-                <Filter className="w-4 h-4" />
+                <Filter className="w-4 h-4 md:w-5 md:h-5" />
               </button>
               <button
                 onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg ${viewMode === 'grid' ? 'bg-primary-100 text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
+                className={`p-2.5 md:p-3 rounded-lg transition-all duration-200 ${
+                  viewMode === 'grid' 
+                    ? 'bg-primary-100 text-primary-600 border border-primary-200' 
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50 border border-transparent'
+                }`}
+                aria-label="Grid view"
               >
-                <Map className="w-4 h-4" />
+                <Map className="w-4 h-4 md:w-5 md:h-5" />
               </button>
             </div>
           </div>
@@ -321,283 +380,351 @@ const FleetManagement = () => {
       </div>
 
       {/* Summary */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center justify-between">
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 md:p-4">
+        <div className="flex flex-col gap-3">
           <div className="flex items-center">
-            <Activity className="w-5 h-5 text-blue-600 mr-2" />
-            <span className="text-sm font-medium text-blue-900">
+            <Activity className="w-4 h-4 md:w-5 md:h-5 text-primary-600 mr-2 flex-shrink-0" />
+            <span className="text-sm md:text-base font-semibold text-gray-900">
               Showing {filteredBuses.length} of {buses.length} buses
             </span>
           </div>
-          <div className="flex items-center space-x-4 text-sm text-blue-700">
-            <span>On Duty: {buses.filter(b => getSystemStatus(b).status === 'On Duty').length}</span>
-            <span>•</span>
-            <span>Live: {buses.filter(b => getTrackingStatus(b).status === 'Live').length}</span>
-            <span>•</span>
-            <span>With Location: {buses.filter(b => b.latitude && b.longitude).length}</span>
+          <div className="flex items-center flex-wrap gap-2 md:gap-4 text-xs md:text-sm text-gray-700">
+            <span className="whitespace-nowrap">On Duty: {buses.filter(b => getSystemStatus(b).status === 'On Duty').length}</span>
+            <span className="hidden sm:inline text-gray-400">•</span>
+            <span className="whitespace-nowrap">Live: {buses.filter(b => getTrackingStatus(b).status === 'Live').length}</span>
+            <span className="hidden sm:inline text-gray-400">•</span>
+            <span className="whitespace-nowrap">With Location: {buses.filter(b => b.latitude && b.longitude).length}</span>
           </div>
         </div>
       </div>
 
       {/* Buses Display */}
       {viewMode === 'table' ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('bus_number')}
-                  >
-                    <div className="flex items-center">
-                      Bus
-                      {sortBy === 'bus_number' && (
-                        <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                      )}
-                    </div>
-                  </th>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('status')}
-                  >
-                    <div className="flex items-center">
-                      Status
-                      {sortBy === 'status' && (
-                        <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                      )}
-                    </div>
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Location
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Driver
-                  </th>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('last_location_update')}
-                  >
-                    <div className="flex items-center">
-                      Last Update
-                      {sortBy === 'last_location_update' && (
-                        <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                      )}
-                    </div>
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredBuses.map((bus) => {
-                const driver = drivers.find(d => d.id === bus.driver_id);
-                
-                return (
-                  <tr key={bus.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
-                          <Bus className="w-5 h-5 text-primary-600" />
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {bus.name || `Bus ${bus.bus_number}`}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {bus.route_id ? `Route ${bus.route_id.slice(-3)}` : 'No route assigned'}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="space-y-2">
-                        <div className="flex items-center space-x-2">
-                          <span className={`text-xs font-semibold rounded-full px-2 py-1 ${getSystemStatus(bus).color}`}>
-                            {getSystemStatus(bus).status}
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className={`text-xs font-semibold rounded-full px-2 py-1 ${getTrackingStatus(bus).color}`}>
-                            {getTrackingStatus(bus).status}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {bus.latitude && bus.longitude ? (
-                        <div className="flex items-center">
-                          <MapPin className="w-4 h-4 text-green-500 mr-1" />
-                          <span className="text-green-600">Live</span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-500">No location</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {driver ? (
-                        <div>
-                          <div className="font-medium">{driver.first_name} {driver.last_name}</div>
-                          <div className="text-gray-500">{driver.license_number}</div>
-                        </div>
-                      ) : (
-                        <span className="text-gray-500">No driver assigned</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {bus.last_location_update ? (
-                        new Date(bus.last_location_update).toLocaleString()
-                      ) : (
-                        'Never'
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="relative">
-                        <button
-                          onClick={() => setShowActions(showActions === bus.id ? null : bus.id)}
-                          className="text-gray-400 hover:text-gray-600"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                        
-                        {showActions === bus.id && (
-                          <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-                            <div className="py-1">
-                              <button
-                                onClick={() => {
-                                  setSelectedBus(bus);
-                                  setShowModal(true);
-                                  setShowActions(null);
-                                }}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                              >
-                                <Edit className="w-4 h-4 mr-3" />
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => {
-                                  handleDeleteBus(bus.id);
-                                  setShowActions(null);
-                                }}
-                                className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="w-4 h-4 mr-3" />
-                                Delete
-                              </button>
-                            </div>
-                          </div>
+        <div className="bg-white rounded-[22px] border border-gray-200 overflow-hidden
+                        shadow-[0_2px_8px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]">
+          <div className="overflow-x-auto -mx-4 sm:mx-0 overflow-y-auto" style={{ maxHeight: '70vh' }}>
+            <div className="inline-block min-w-full align-middle">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th 
+                      className="px-3 md:px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider 
+                               cursor-pointer hover:bg-gray-100 transition-colors duration-200 sticky left-0 bg-gray-50 z-10"
+                      onClick={() => handleSort('bus_number')}
+                    >
+                      <div className="flex items-center whitespace-nowrap">
+                        Bus
+                        {sortBy === 'bus_number' && (
+                          <span className="ml-1 text-primary-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
                         )}
                       </div>
-                    </td>
+                    </th>
+                    <th 
+                      className="px-3 md:px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider 
+                               cursor-pointer hover:bg-gray-100 transition-colors duration-200 hidden sm:table-cell"
+                      onClick={() => handleSort('status')}
+                    >
+                      <div className="flex items-center whitespace-nowrap">
+                        Status
+                        {sortBy === 'status' && (
+                          <span className="ml-1 text-primary-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-3 md:px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      Location
+                    </th>
+                    <th className="px-3 md:px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                      Driver
+                    </th>
+                    <th 
+                      className="px-3 md:px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider 
+                               cursor-pointer hover:bg-gray-100 transition-colors duration-200 hidden md:table-cell"
+                      onClick={() => handleSort('last_location_update')}
+                    >
+                      <div className="flex items-center whitespace-nowrap">
+                        Last Update
+                        {sortBy === 'last_location_update' && (
+                          <span className="ml-1 text-primary-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-3 md:px-4 lg:px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider sticky right-0 bg-gray-50 z-10">
+                      Actions
+                    </th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredBuses.map((bus) => {
+                    const driver = drivers.find(d => d.id === bus.driver_id);
+                    
+                    return (
+                      <tr key={bus.id} className="hover:bg-gray-50 transition-colors duration-150">
+                        <td className="px-3 md:px-4 lg:px-6 py-3 md:py-4 sticky left-0 bg-white z-0">
+                          <div className="flex items-center min-w-0">
+                            <div className="w-8 h-8 md:w-10 md:h-10 bg-primary-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <Bus className="w-4 h-4 md:w-5 md:h-5 text-primary-600" />
+                            </div>
+                            <div className="ml-2 md:ml-3 lg:ml-4 min-w-0">
+                              <div className="text-sm md:text-base font-semibold text-gray-900 truncate">
+                                {bus.name || `Bus ${bus.bus_number}`}
+                              </div>
+                              <div className="text-xs md:text-sm text-gray-500 truncate">
+                                {bus.route_id ? `Route ${bus.route_id.slice(-3)}` : 'No route'}
+                              </div>
+                              {/* Mobile-only: Show status badges */}
+                              <div className="flex items-center gap-1.5 mt-1 sm:hidden">
+                                <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${getSystemStatus(bus).color}`}>
+                                  {getSystemStatus(bus).status}
+                                </span>
+                                <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${getTrackingStatus(bus).color}`}>
+                                  {getTrackingStatus(bus).status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 md:px-4 lg:px-6 py-3 md:py-4 hidden sm:table-cell">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center">
+                              <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${getSystemStatus(bus).color}`}>
+                                {getSystemStatus(bus).status}
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${getTrackingStatus(bus).color}`}>
+                                {getTrackingStatus(bus).status}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 md:px-4 lg:px-6 py-3 md:py-4 hidden md:table-cell">
+                          {bus.latitude && bus.longitude ? (
+                            <div className="flex items-center">
+                              <MapPin className="w-3 h-3 md:w-4 md:h-4 text-green-500 mr-1 flex-shrink-0" />
+                              <span className="text-xs md:text-sm text-green-600 font-medium">Live</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs md:text-sm text-gray-500">No location</span>
+                          )}
+                        </td>
+                        <td className="px-3 md:px-4 lg:px-6 py-3 md:py-4 hidden lg:table-cell">
+                          {driver ? (
+                            <div className="min-w-0">
+                              <div className="text-xs md:text-sm font-semibold text-gray-900 truncate">
+                                {driver.first_name} {driver.last_name}
+                              </div>
+                              <div className="text-xs text-gray-500 truncate">{driver.license_number}</div>
+                            </div>
+                          ) : (
+                            <span className="text-xs md:text-sm text-gray-500">No driver</span>
+                          )}
+                        </td>
+                        <td className="px-3 md:px-4 lg:px-6 py-3 md:py-4 hidden md:table-cell">
+                          <span className="text-xs md:text-sm text-gray-500 whitespace-nowrap">
+                            {bus.last_location_update ? (
+                              <>
+                                <span className="hidden lg:inline">
+                                  {new Date(bus.last_location_update).toLocaleString()}
+                                </span>
+                                <span className="lg:hidden">
+                                  {new Date(bus.last_location_update).toLocaleDateString()}
+                                </span>
+                              </>
+                            ) : (
+                              'Never'
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-3 md:px-4 lg:px-6 py-3 md:py-4 text-right sticky right-0 bg-white z-0">
+                          <div className="relative inline-block">
+                            <button
+                              ref={(el) => { actionRefs.current[bus.id] = el; }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleActions(bus.id);
+                              }}
+                              className="text-gray-400 hover:text-primary-600 transition-colors duration-200 p-1.5 md:p-2 rounded-lg hover:bg-gray-100 touch-manipulation"
+                              aria-label="More actions"
+                            >
+                              <MoreVertical className="w-4 h-4 md:w-5 md:h-5" />
+                            </button>
+                            
+                            {showActions === bus.id && (
+                              <>
+                                {/* Backdrop to close menu */}
+                                <div 
+                                  className="fixed inset-0 z-[100]"
+                                  onClick={() => setShowActions(null)}
+                                />
+                                <div className={`absolute right-0 w-48 bg-white rounded-xl shadow-lg z-[110] border border-gray-200
+                                              animate-scale-in ${
+                                                menuPosition[bus.id] === 'top' 
+                                                  ? 'bottom-full mb-2' 
+                                                  : 'top-full mt-2'
+                                              }`}>
+                                  <div className="py-1">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedBus(bus);
+                                        setShowModal(true);
+                                        setShowActions(null);
+                                      }}
+                                      className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150 touch-manipulation"
+                                    >
+                                      <Edit className="w-4 h-4 mr-3 flex-shrink-0" />
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteBus(bus.id);
+                                        setShowActions(null);
+                                      }}
+                                      className="flex items-center w-full px-4 py-2.5 text-sm text-red-700 hover:bg-red-50 transition-colors duration-150 touch-manipulation"
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-3 flex-shrink-0" />
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
       ) : (
         /* Grid View */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
           {filteredBuses.map((bus) => {
             const driver = drivers.find(d => d.id === bus.driver_id);
             
             return (
-              <div key={bus.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div key={bus.id} className="bg-white rounded-[22px] border border-gray-200 p-4 md:p-6 
+                                          shadow-[0_2px_8px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]
+                                          hover:shadow-[0_4px_12px_rgba(0,0,0,0.08),0_2px_4px_rgba(0,0,0,0.04)]
+                                          hover:border-primary-500 transition-all duration-200">
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center">
-                    <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
-                      <Bus className="w-6 h-6 text-primary-600" />
+                  <div className="flex items-center min-w-0 flex-1">
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-primary-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Bus className="w-5 h-5 md:w-6 md:h-6 text-primary-600" />
                     </div>
-                    <div className="ml-3">
-                      <h3 className="text-lg font-semibold text-gray-900">
+                    <div className="ml-3 min-w-0">
+                      <h3 className="text-base md:text-lg font-semibold text-gray-900 truncate">
                         {bus.name || `Bus ${bus.bus_number}`}
                       </h3>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-xs md:text-sm text-gray-500 truncate">
                         {bus.route_id ? `Route ${bus.route_id.slice(-3)}` : 'No route assigned'}
                       </p>
                     </div>
                   </div>
-                  <div className="relative">
+                  <div className="relative flex-shrink-0 ml-2">
                     <button
-                      onClick={() => setShowActions(showActions === bus.id ? null : bus.id)}
-                      className="text-gray-400 hover:text-gray-600"
+                      ref={(el) => { actionRefs.current[bus.id] = el; }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleActions(bus.id);
+                      }}
+                      className="text-gray-400 hover:text-primary-600 transition-colors duration-200 p-1 rounded-lg hover:bg-gray-100"
                     >
                       <MoreVertical className="w-4 h-4" />
                     </button>
                     
                     {showActions === bus.id && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-                        <div className="py-1">
-                          <button
-                            onClick={() => {
-                              setSelectedBus(bus);
-                              setShowModal(true);
-                              setShowActions(null);
-                            }}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          >
-                            <Edit className="w-4 h-4 mr-3" />
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleDeleteBus(bus.id);
-                              setShowActions(null);
-                            }}
-                            className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4 mr-3" />
-                            Delete
-                          </button>
+                      <>
+                        {/* Backdrop to close menu */}
+                        <div 
+                          className="fixed inset-0 z-[100]"
+                          onClick={() => setShowActions(null)}
+                        />
+                        <div className={`absolute right-0 w-48 bg-white rounded-xl shadow-lg z-[110] border border-gray-200
+                                      animate-scale-in ${
+                                        menuPosition[bus.id] === 'top' 
+                                          ? 'bottom-full mb-2' 
+                                          : 'top-full mt-2'
+                                      }`}>
+                          <div className="py-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedBus(bus);
+                                setShowModal(true);
+                                setShowActions(null);
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                            >
+                              <Edit className="w-4 h-4 mr-3" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteBus(bus.id);
+                                setShowActions(null);
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50 transition-colors duration-150"
+                            >
+                              <Trash2 className="w-4 h-4 mr-3" />
+                              Delete
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      </>
                     )}
                   </div>
                 </div>
                 
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Status</span>
-                    <span className={`text-xs font-semibold rounded-full px-2 py-1 ${getSystemStatus(bus).color}`}>
+                    <span className="text-xs md:text-sm text-gray-600">Status</span>
+                    <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${getSystemStatus(bus).color}`}>
                       {getSystemStatus(bus).status}
                     </span>
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Tracking</span>
-                    <span className={`text-xs font-semibold rounded-full px-2 py-1 ${getTrackingStatus(bus).color}`}>
+                    <span className="text-xs md:text-sm text-gray-600">Tracking</span>
+                    <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${getTrackingStatus(bus).color}`}>
                       {getTrackingStatus(bus).status}
                     </span>
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Location</span>
+                    <span className="text-xs md:text-sm text-gray-600">Location</span>
                     {bus.latitude && bus.longitude ? (
                       <div className="flex items-center text-green-600">
-                        <MapPin className="w-4 h-4 mr-1" />
-                        <span className="text-sm">Live</span>
+                        <MapPin className="w-3 h-3 md:w-4 md:h-4 mr-1" />
+                        <span className="text-xs md:text-sm font-medium">Live</span>
                       </div>
                     ) : (
-                      <span className="text-sm text-gray-500">No location</span>
+                      <span className="text-xs md:text-sm text-gray-500">No location</span>
                     )}
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Driver</span>
+                    <span className="text-xs md:text-sm text-gray-600">Driver</span>
                     {driver ? (
-                      <span className="text-sm text-gray-900">{driver.first_name} {driver.last_name}</span>
+                      <span className="text-xs md:text-sm text-gray-900 font-medium truncate ml-2">
+                        {driver.first_name} {driver.last_name}
+                      </span>
                     ) : (
-                      <span className="text-sm text-gray-500">No driver</span>
+                      <span className="text-xs md:text-sm text-gray-500">No driver</span>
                     )}
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Last Update</span>
-                    <span className="text-sm text-gray-500">
+                    <span className="text-xs md:text-sm text-gray-600">Last Update</span>
+                    <span className="text-xs md:text-sm text-gray-500 truncate ml-2">
                       {bus.last_location_update ? (
-                        new Date(bus.last_location_update).toLocaleString()
+                        new Date(bus.last_location_update).toLocaleDateString()
                       ) : (
                         'Never'
                       )}

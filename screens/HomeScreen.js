@@ -13,15 +13,9 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useSupabase } from '../contexts/SupabaseContext';
-import SetAlarmModal from '../components/SetAlarmModal';
 import { colors, spacing, radius, shadows, cardStyles } from '../styles/uiTheme';
 
 const services = [
-  {
-    title: 'Set an Alarm',
-    icon: 'alarm',
-    color: colors.brand,
-  },
   {
     title: 'Check Bus Schedules',
     icon: 'schedule',
@@ -81,7 +75,6 @@ export default function HomeScreen({ navigation }) {
   const [location, setLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
   const [nearbyBuses, setNearbyBuses] = useState([]);
-  const [showSetAlarmModal, setShowSetAlarmModal] = useState(false);
   
   // Get data from Supabase context
   const { 
@@ -96,11 +89,7 @@ export default function HomeScreen({ navigation }) {
 
 
   const handleServicePress = (service) => {
-    if (service.title === 'Set an Alarm') {
-      setShowSetAlarmModal(true);
-    } else {
-      navigation.navigate('Routes');
-    }
+    navigation.navigate('Routes');
   };
 
   const handleBusPress = (bus) => {
@@ -202,7 +191,7 @@ export default function HomeScreen({ navigation }) {
         
         return {
           id: bus.id,
-          name: bus.name || `Metro Link Bus # ${bus.bus_number}`,
+          name: bus.name || `NaviGO Bus # ${bus.bus_number}`,
           distance: formatDistance(distance),
           distanceKm: distance,
           estimatedArrival: `Estimated arrival ${calculateETA(distance, bus.speed || 25)}`,
@@ -330,7 +319,7 @@ export default function HomeScreen({ navigation }) {
         {/* Modern Welcome Section with Quick Stats */}
         <View style={styles.welcomeSection}>
           <Text style={styles.greeting}>{getGreeting()}</Text>
-          <Text style={styles.welcome}>Metro Link</Text>
+          <Text style={styles.welcome}>NaviGO</Text>
           <View style={styles.quickStatsRow}>
             <View style={styles.quickStatCard}>
               <Ionicons name="bus" size={20} color={colors.brand} />
@@ -537,7 +526,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.feedbackSection}>
           <Text style={styles.sectionLabel}>Review and Feedback</Text>
           <Text style={styles.feedbackDescription}>
-            Tell us about your Metro Link experience and share any ideas you have to help enhance your travel experience.
+            Tell us about your NaviGO experience and share any ideas you have to help enhance your travel experience.
           </Text>
           <View style={styles.feedbackContainer}>
             <View style={styles.feedbackInputContainer}>
@@ -573,12 +562,6 @@ export default function HomeScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* Set Alarm Modal */}
-      <SetAlarmModal
-        visible={showSetAlarmModal}
-        onClose={() => setShowSetAlarmModal(false)}
-        userType="passenger"
-      />
     </View>
   );
 }

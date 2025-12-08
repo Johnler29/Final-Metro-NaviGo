@@ -21,6 +21,7 @@ import * as Location from 'expo-location';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { useDrawer } from '../contexts/DrawerContext';
 import CapacityStatusModal from '../components/CapacityStatusModal';
+import NotificationModal from '../components/NotificationModal';
 import { supabase } from '../lib/supabase';
 import { Vibration } from 'react-native';
 import {
@@ -54,6 +55,14 @@ export default function DriverHomeScreen({ navigation }) {
   const [pingNotifications, setPingNotifications] = useState([]);
   const [showPingModal, setShowPingModal] = useState(false);
   const [unreadPingCount, setUnreadPingCount] = useState(0);
+  const [notificationModal, setNotificationModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    buttons: null,
+    type: 'default',
+    icon: null,
+  });
 
   // Get data from Supabase context
   const { 
@@ -343,6 +352,13 @@ export default function DriverHomeScreen({ navigation }) {
     hydrateDutyStateFromSession();
   }, [currentBus?.id]);
 
+  // Sync currentCapacity with currentBus.capacity_percentage when currentBus changes
+  useEffect(() => {
+    if (currentBus?.capacity_percentage !== undefined && currentBus?.capacity_percentage !== null) {
+      setCurrentCapacity(currentBus.capacity_percentage);
+    }
+  }, [currentBus?.capacity_percentage]);
+
   // Location watcher ref and helpers
   const locationWatchRef = useRef(null);
 
@@ -525,14 +541,25 @@ export default function DriverHomeScreen({ navigation }) {
           // Vibrate and alert on new ping
           if (eventType === 'INSERT' || eventType === 'insert') {
             Vibration.vibrate([0, 200, 100, 200]);
-            Alert.alert(
-              '🔔 New Passenger Ping!',
-              'A passenger has sent you a notification',
-              [
-                { text: 'View', onPress: () => setShowPingModal(true) },
-                { text: 'Later', style: 'cancel' }
-              ]
-            );
+            setNotificationModal({
+              visible: true,
+              title: 'New Passenger Ping!',
+              message: 'A passenger has sent you a notification',
+              buttons: [
+                { 
+                  text: 'View', 
+                  onPress: () => {
+                    setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null });
+                    setShowPingModal(true);
+                  }
+                },
+                {
+                  text: 'Later', 
+                  style: 'cancel',
+                  onPress: () => setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null })
+                }
+              ],
+            });
           }
         }
       )
@@ -577,13 +604,28 @@ export default function DriverHomeScreen({ navigation }) {
       const result = await acknowledgePing(pingId);
       if (result.success) {
         await loadPingNotifications();
-        Alert.alert('Success', 'Ping acknowledged!');
+        setNotificationModal({
+          visible: true,
+          title: 'Success',
+          message: 'Ping acknowledged!',
+          buttons: null,
+        });
       } else {
-        Alert.alert('Error', result.error || 'Failed to acknowledge ping');
+        setNotificationModal({
+          visible: true,
+          title: 'Error',
+          message: result.error || 'Failed to acknowledge ping',
+          buttons: null,
+        });
       }
     } catch (error) {
       console.error('Error acknowledging ping:', error);
-      Alert.alert('Error', 'Failed to acknowledge ping');
+      setNotificationModal({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to acknowledge ping',
+        buttons: null,
+      });
     }
   };
 
@@ -592,13 +634,28 @@ export default function DriverHomeScreen({ navigation }) {
       const result = await completePing(pingId);
       if (result.success) {
         await loadPingNotifications();
-        Alert.alert('Success', 'Ping completed!');
+        setNotificationModal({
+          visible: true,
+          title: 'Success',
+          message: 'Ping completed!',
+          buttons: null,
+        });
       } else {
-        Alert.alert('Error', result.error || 'Failed to complete ping');
+        setNotificationModal({
+          visible: true,
+          title: 'Error',
+          message: result.error || 'Failed to complete ping',
+          buttons: null,
+        });
       }
     } catch (error) {
       console.error('Error completing ping:', error);
-      Alert.alert('Error', 'Failed to complete ping');
+      setNotificationModal({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to complete ping',
+        buttons: null,
+      });
     }
   };
 
@@ -719,20 +776,34 @@ export default function DriverHomeScreen({ navigation }) {
   const handleQuickAction = async (action) => {
     // Use the current driver from state
     if (!currentDriver) {
-      Alert.alert('Error', 'Driver not found. Please log in again.');
+      Alert.alert('Error', 'Bus conductor not found. Please log in again.');
       return;
     }
     
     // Use the current bus from state
     if (!currentBus) {
-      Alert.alert('No Bus Assigned', 'No bus is currently assigned to you.');
+      setNotificationModal({
+        visible: true,
+        title: 'No Bus Assigned',
+        message: 'No bus is currently assigned to you.',
+        buttons: null,
+        type: 'warning',
+        icon: 'warning',
+      });
       return;
     }
 
     switch (action) {
       case 'startTrip':
         if (isOnDuty) {
-          Alert.alert('Already on duty', 'You are already on an active trip.');
+          setNotificationModal({
+            visible: true,
+            title: 'Already on duty',
+            message: 'You are already on an active trip.',
+            buttons: null,
+            type: 'info',
+            icon: 'information-circle',
+          });
         } else {
           try {
             const now = new Date();
@@ -790,7 +861,14 @@ export default function DriverHomeScreen({ navigation }) {
               console.warn('⚠️ Failed to start driver background tracking:', bgError?.message || bgError);
             }
             
-            Alert.alert('Trip Started', 'Your trip has been started successfully.');
+            setNotificationModal({
+              visible: true,
+              title: 'Trip Started',
+              message: 'Your trip has been started successfully.',
+              buttons: null,
+              type: 'success',
+              icon: 'checkmark-circle',
+            });
           } catch (error) {
             console.error('Error starting trip:', error);
             // Roll back to a safe "off duty" state if anything failed
@@ -806,7 +884,14 @@ export default function DriverHomeScreen({ navigation }) {
         break;
       case 'endTrip':
         if (!isOnDuty || !currentTrip) {
-          Alert.alert('No active trip', 'You are not currently on an active trip.');
+          setNotificationModal({
+            visible: true,
+            title: 'No active trip',
+            message: 'You are not currently on an active trip.',
+            buttons: null,
+            type: 'info',
+            icon: 'information-circle',
+          });
         } else {
           try {
             // Validate we have a busId (required for ending trip)
@@ -877,7 +962,9 @@ export default function DriverHomeScreen({ navigation }) {
               }
             }
             
-            // End driver session (best-effort, don't fail if this errors)
+            // End driver session in database if present (best-effort, don't fail if this errors)
+            // NOTE: Do NOT remove driverSession from AsyncStorage here - that would log the driver out
+            // The driverSession should only be removed when the driver actually logs out
             try {
               const sessionData = await AsyncStorage.getItem('driverSession');
               if (sessionData) {
@@ -894,31 +981,56 @@ export default function DriverHomeScreen({ navigation }) {
               console.warn('⚠️ Failed to end driver session (non-fatal):', sessionError?.message || sessionError);
             }
             
-            // Clear driver session and trip data (non-blocking)
-            try {
-              await AsyncStorage.removeItem('driverSession');
-            } catch (e) {
-              console.warn('removeItem(driverSession) failed:', e?.message || e);
-            }
+            // Clear trip data (non-blocking) - but keep driverSession so driver stays logged in
             try {
               await AsyncStorage.removeItem('currentTrip');
             } catch (e) {
               console.warn('removeItem(currentTrip) failed:', e?.message || e);
             }
             
-            Alert.alert('Trip Ended', 'Your trip has been ended successfully.');
+            setNotificationModal({
+              visible: true,
+              title: 'Trip Ended',
+              message: 'Your trip has been ended successfully.',
+              buttons: null,
+              type: 'success',
+              icon: 'checkmark-circle',
+            });
           } catch (error) {
             console.error('❌ Unexpected error ending trip:', error);
             // Even if there's an error, the UI is already updated, so show success
-            Alert.alert('Trip Ended', 'Your trip has been ended. Some cleanup operations may have failed, but you are now off duty.');
+            setNotificationModal({
+              visible: true,
+              title: 'Trip Ended',
+              message: 'Your trip has been ended. Some cleanup operations may have failed, but you are now off duty.',
+              buttons: null,
+              type: 'success',
+              icon: 'checkmark-circle',
+            });
           }
         }
         break;
       case 'capacity':
-        if (!currentBus) {
-          Alert.alert('No Bus Assigned', 'No bus is currently assigned to you.');
+        if (!isOnDuty) {
+          setNotificationModal({
+            visible: true,
+            title: 'Off Duty',
+            message: 'You must be on duty to update bus capacity. Please start a trip first.',
+            buttons: null,
+            type: 'warning',
+            icon: 'warning',
+          });
+        } else if (!currentBus) {
+          setNotificationModal({
+            visible: true,
+            title: 'No Bus Assigned',
+            message: 'No bus is currently assigned to you.',
+            buttons: null,
+            type: 'warning',
+            icon: 'warning',
+          });
         } else {
-          setCurrentBus(currentBus);
+          // Ensure currentCapacity is synced with currentBus before opening modal
           setCurrentCapacity(currentBus.capacity_percentage || 0);
           setShowCapacityModal(true);
         }
@@ -929,7 +1041,12 @@ export default function DriverHomeScreen({ navigation }) {
     }
   };
 
-  const handleCapacityUpdate = async (busId, capacityPercentage) => {
+  const handleCapacityUpdate = async (busId, capacityPercentage, pwdPassengers = 0) => {
+    // Validate driver is on duty
+    if (!isOnDuty) {
+      throw new Error('You must be on duty to update bus capacity. Please start a trip first.');
+    }
+    
     // Validate inputs
     if (!busId) {
       throw new Error('Bus ID is required. Please ensure you are assigned to a bus.');
@@ -940,19 +1057,37 @@ export default function DriverHomeScreen({ navigation }) {
     }
 
     try {
-      console.log('🔄 Updating capacity for bus:', busId, 'to', capacityPercentage + '%');
-      const result = await updateBusCapacityStatus(busId, capacityPercentage);
+      console.log('🔄 Updating capacity for bus:', busId, 'to', capacityPercentage + '%', 'PWD:', pwdPassengers);
+      const result = await updateBusCapacityStatus(busId, capacityPercentage, pwdPassengers);
       
       if (result) {
         setCurrentCapacity(capacityPercentage);
+        // Get max capacity from result (supports both 'capacity' and 'max_capacity' for compatibility)
+        const maxCapacity = result.max_capacity || result.capacity || currentBus?.max_capacity || currentBus?.capacity || 50;
+        const currentPassengers = Math.round((capacityPercentage / 100) * maxCapacity);
+        
         // Update the bus in the local state
         const updatedBus = buses.find(bus => bus.id === busId);
         if (updatedBus) {
           updatedBus.capacity_percentage = capacityPercentage;
-          // Get max capacity from result (supports both 'capacity' and 'max_capacity' for compatibility)
-          const maxCapacity = result.max_capacity || result.capacity || updatedBus.max_capacity || updatedBus.capacity || 50;
-          updatedBus.current_passengers = Math.round((capacityPercentage / 100) * maxCapacity);
+          updatedBus.current_passengers = currentPassengers;
+          if (pwdPassengers !== undefined) {
+            updatedBus.current_pwd_passengers = pwdPassengers;
+            updatedBus.pwd_seats_available = (updatedBus.pwd_seats || 4) - pwdPassengers;
+          }
         }
+        
+        // CRITICAL: Update currentBus state so the modal shows the correct value when reopened
+        if (currentBus && currentBus.id === busId) {
+          setCurrentBus({
+            ...currentBus,
+            capacity_percentage: capacityPercentage,
+            current_passengers: currentPassengers,
+            current_pwd_passengers: pwdPassengers,
+            pwd_seats_available: (currentBus.pwd_seats || 4) - pwdPassengers,
+          });
+        }
+        
         console.log('✅ Capacity updated successfully');
       }
     } catch (error) {
@@ -964,47 +1099,38 @@ export default function DriverHomeScreen({ navigation }) {
   };
 
   const handleProfilePress = () => {
-    Alert.alert('Profile', 'Driver profile screen coming soon!');
+    navigation.navigate('DriverProfile');
   };
 
-  const handleMenuPress = () => {
-    // Drawer removed
-  };
 
-  const handleRoleSwitch = () => {
-    Alert.alert(
-      'Switch to Passenger Mode',
-      'Are you a passenger?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Switch to Passenger',
-          onPress: () => navigation.navigate('Home'),
-        },
-      ]
-    );
-  };
 
   const handleOffDuty = async () => {
     if (!isOnDuty) {
-      Alert.alert('Already Off Duty', 'You are already off duty.');
+      setNotificationModal({
+        visible: true,
+        title: 'Already Off Duty',
+        message: 'You are already off duty.',
+        buttons: null,
+        type: 'info',
+        icon: 'information-circle',
+      });
       return;
     }
 
-    Alert.alert(
-      'Go Off Duty',
-      'Are you sure you want to go off duty? This will stop location tracking.',
-      [
+    setNotificationModal({
+      visible: true,
+      title: 'Go Off Duty',
+      message: 'Are you sure you want to go off duty? This will stop location tracking.',
+      buttons: [
         {
           text: 'Cancel',
           style: 'cancel',
+          onPress: () => setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null }),
         },
         {
           text: 'Go Off Duty',
           onPress: async () => {
+            setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null });
             try {
               // Optimistically update UI state so user isn't blocked by cleanup errors
               setIsOnDuty(false);
@@ -1038,7 +1164,9 @@ export default function DriverHomeScreen({ navigation }) {
                 }
               }
 
-              // End driver session if present (continue on error)
+              // End driver session in database if present (continue on error)
+              // NOTE: Do NOT remove driverSession from AsyncStorage here - that would log the driver out
+              // The driverSession should only be removed when the driver actually logs out
               try {
                 const sessionData = await AsyncStorage.getItem('driverSession');
                 if (sessionData) {
@@ -1051,8 +1179,9 @@ export default function DriverHomeScreen({ navigation }) {
                 console.warn('Reading driverSession failed:', e?.message || e);
               }
 
-              // Clear driver session key (non-blocking)
-              try { await AsyncStorage.removeItem('driverSession'); } catch (e) { console.warn('removeItem(driverSession) failed:', e?.message || e); }
+              // DO NOT remove driverSession from AsyncStorage - driver should stay logged in
+              // Only clear the currentTrip since the driver is going off duty
+              try { await AsyncStorage.removeItem('currentTrip'); } catch (e) { console.warn('removeItem(currentTrip) failed:', e?.message || e); }
 
               // Update driver status (continue even if this fails due to RLS/columns)
               let driverStatusUpdated = false;
@@ -1068,7 +1197,12 @@ export default function DriverHomeScreen({ navigation }) {
                 } catch (e) { 
                   console.error('❌ updateDriverStatus failed:', e?.message || e);
                   // Show error to user so they know it failed
-                  Alert.alert('Warning', `Driver status update failed: ${e?.message || 'Unknown error'}. The bus may still appear on the map.`);
+                  setNotificationModal({
+                    visible: true,
+                    title: 'Warning',
+                    message: `Driver status update failed: ${e?.message || 'Unknown error'}. The bus may still appear on the map.`,
+                    buttons: null,
+                  });
                 }
               }
 
@@ -1090,17 +1224,32 @@ export default function DriverHomeScreen({ navigation }) {
                   
                   if (error) {
                     console.error('❌ Bus status update error:', error);
-                    Alert.alert('Warning', `Bus status update failed: ${error.message}. The bus may still appear on the map.`);
+                    setNotificationModal({
+                      visible: true,
+                      title: 'Warning',
+                      message: `Bus status update failed: ${error.message}. The bus may still appear on the map.`,
+                      buttons: null,
+                    });
                   } else if (data && data.length > 0) {
                     busStatusUpdated = true;
                     console.log('✅ Bus status updated to inactive:', currentBus.id, data[0]);
                   } else {
                     console.warn('⚠️ Bus status update returned no data. Bus may not exist or RLS blocked update:', currentBus.id);
-                    Alert.alert('Warning', 'Bus status update may have failed. Please check the database manually.');
+                    setNotificationModal({
+                      visible: true,
+                      title: 'Warning',
+                      message: 'Bus status update may have failed. Please check the database manually.',
+                      buttons: null,
+                    });
                   }
                 } catch (e) {
                   console.error('❌ force bus offline failed:', e?.message || e);
-                  Alert.alert('Error', `Failed to update bus status: ${e?.message || 'Unknown error'}. Please check the database.`);
+                  setNotificationModal({
+                    visible: true,
+                    title: 'Error',
+                    message: `Failed to update bus status: ${e?.message || 'Unknown error'}. Please check the database.`,
+                    buttons: null,
+                  });
                 }
               }
               
@@ -1112,15 +1261,25 @@ export default function DriverHomeScreen({ navigation }) {
                 busId: currentBus?.id
               });
 
-              Alert.alert('Off Duty', 'You are now off duty. Location tracking has stopped.');
+              setNotificationModal({
+                visible: true,
+                title: 'Off Duty',
+                message: 'You are now off duty. Location tracking has stopped.',
+                buttons: null,
+              });
             } catch (error) {
               console.error('Error going off duty:', error);
-              Alert.alert('Error', 'Failed to go off duty. Please try again.');
+              setNotificationModal({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to go off duty. Please try again.',
+                buttons: null,
+              });
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   if (loading) {
@@ -1128,7 +1287,7 @@ export default function DriverHomeScreen({ navigation }) {
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.brand} />
-          <Text style={styles.loadingText}>Loading driver data...</Text>
+          <Text style={styles.loadingText}>Loading bus conductor data...</Text>
         </View>
       </View>
     );
@@ -1139,7 +1298,7 @@ export default function DriverHomeScreen({ navigation }) {
       <View style={styles.container}>
         <View style={styles.errorContainer}>
           <Ionicons name="warning" size={48} color="#F44336" />
-          <Text style={styles.errorText}>Failed to load driver data</Text>
+          <Text style={styles.errorText}>Failed to load bus conductor data</Text>
           <Text style={styles.errorSubtext}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={async () => {
             try {
@@ -1162,9 +1321,7 @@ export default function DriverHomeScreen({ navigation }) {
       <View style={styles.headerContainer}>
         <View style={styles.headerInner}>
           <View style={styles.headerRow}>
-            <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-              <Ionicons name="menu" size={22} color="#fff" />
-            </TouchableOpacity>
+            <View style={styles.placeholder} />
 
             <View style={[
               styles.headerStatusPill,
@@ -1225,7 +1382,6 @@ export default function DriverHomeScreen({ navigation }) {
         <StatusCard
           isOnDuty={isOnDuty}
           onOffDutyPress={handleOffDuty}
-          onSwitchModePress={handleRoleSwitch}
         />
       </View>
 
@@ -1260,21 +1416,40 @@ export default function DriverHomeScreen({ navigation }) {
         <View style={styles.quickActionsSection}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.quickActionsGrid}>
-            {quickActions.map((action, index) => (
-              <Pressable
-                key={index}
-                style={({ pressed }) => [
-                  styles.quickActionCard,
-                  pressed && styles.cardPressed,
-                ]}
-                onPress={() => handleQuickAction(action.action)}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: action.color + '15' }]}>
-                  <Ionicons name={action.icon} size={24} color={action.color} />
-                </View>
-                <Text style={styles.quickActionTitle}>{action.title}</Text>
-              </Pressable>
-            ))}
+            {quickActions.map((action, index) => {
+              const isCapacityAction = action.action === 'capacity';
+              const isDisabled = isCapacityAction && !isOnDuty;
+              
+              return (
+                <Pressable
+                  key={index}
+                  style={({ pressed }) => [
+                    styles.quickActionCard,
+                    isDisabled && styles.quickActionCardDisabled,
+                    pressed && !isDisabled && styles.cardPressed,
+                  ]}
+                  onPress={() => !isDisabled && handleQuickAction(action.action)}
+                  disabled={isDisabled}
+                >
+                  <View style={[
+                    styles.quickActionIcon, 
+                    { backgroundColor: isDisabled ? '#E5E7EB' : action.color + '15' }
+                  ]}>
+                    <Ionicons 
+                      name={action.icon} 
+                      size={24} 
+                      color={isDisabled ? '#9CA3AF' : action.color} 
+                    />
+                  </View>
+                  <Text style={[
+                    styles.quickActionTitle,
+                    isDisabled && styles.quickActionTitleDisabled
+                  ]}>
+                    {action.title}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
@@ -1315,6 +1490,17 @@ export default function DriverHomeScreen({ navigation }) {
         onUpdateCapacity={handleCapacityUpdate}
         busId={currentBus?.id}
         busInfo={currentBus}
+      />
+
+      {/* Notification Modal */}
+      <NotificationModal
+        visible={notificationModal.visible}
+        title={notificationModal.title}
+        message={notificationModal.message}
+        buttons={notificationModal.buttons}
+        type={notificationModal.type}
+        icon={notificationModal.icon}
+        onPress={() => setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null })}
       />
 
       {/* Ping Notifications Modal */}
@@ -1392,20 +1578,12 @@ export default function DriverHomeScreen({ navigation }) {
                   <View style={styles.pingBody}>
                     <View style={styles.pingTypeRow}>
                       <Ionicons 
-                        name={
-                          ping.ping_type === 'ride_request' ? 'bus' :
-                          ping.ping_type === 'location_request' ? 'location' :
-                          ping.ping_type === 'eta_request' ? 'time' :
-                          'chatbubble'
-                        } 
+                        name="bus"
                         size={16} 
                         color="#6B7280" 
                       />
                       <Text style={styles.pingType}>
-                        {ping.ping_type === 'ride_request' ? 'Ride Request' :
-                         ping.ping_type === 'location_request' ? 'Location Request' :
-                         ping.ping_type === 'eta_request' ? 'ETA Request' :
-                         'Message'}
+                        Ride Request
                       </Text>
                     </View>
 
@@ -1481,7 +1659,7 @@ export default function DriverHomeScreen({ navigation }) {
   );
 }
 
-const StatusCard = ({ isOnDuty, onOffDutyPress, onSwitchModePress }) => {
+const StatusCard = ({ isOnDuty, onOffDutyPress }) => {
   return (
     <View style={styles.statusCard}>
       <View style={styles.statusCardLeft}>
@@ -1504,10 +1682,6 @@ const StatusCard = ({ isOnDuty, onOffDutyPress, onSwitchModePress }) => {
             <Text style={styles.offDutyText}>Go Off Duty</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.switchModeButton} onPress={onSwitchModePress}>
-          <Ionicons name="swap-horizontal" size={18} color={colors.brand} />
-          <Text style={styles.switchText}>Switch Mode</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -1588,13 +1762,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  menuButton: {
+  placeholder: {
     width: 48,
     height: 48,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
     marginRight: spacing.md,
   },
   headerCenter: {
@@ -1774,22 +1944,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  switchModeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceSubtle,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    gap: spacing.xs,
-  },
-  switchText: {
-    color: '#374151',
-    fontSize: 14,
-    fontWeight: '600',
-  },
   content: {
     flex: 1,
     paddingHorizontal: spacing.xl,
@@ -1941,6 +2095,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#f8f9fa',
   },
+  quickActionCardDisabled: {
+    opacity: 0.5,
+    backgroundColor: '#F9FAFB',
+    borderColor: '#E5E7EB',
+  },
   cardPressed: {
     transform: [{ scale: 0.96 }],
     opacity: 0.8,
@@ -1959,6 +2118,9 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
     textAlign: 'center',
     fontFamily: 'System',
+  },
+  quickActionTitleDisabled: {
+    color: '#9CA3AF',
   },
   recentTripsSection: {
     marginBottom: 32,

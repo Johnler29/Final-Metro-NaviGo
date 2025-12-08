@@ -1,0 +1,39 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#FBBF24"/>
+  
+  <!-- Icon: Bus with Navigation Arrow - Centered -->
+  <g id="logo-icon" transform="translate(362, 362)">
+    <!-- Navigation Compass Circle -->
+    <circle cx="150" cy="150" r="140" fill="#F59E0B" opacity="0.2"/>
+    <circle cx="150" cy="150" r="120" fill="#F59E0B" opacity="0.25"/>
+    
+    <!-- Bus Body -->
+    <rect x="90" y="110" width="120" height="80" rx="12" fill="#F59E0B"/>
+    <rect x="100" y="120" width="100" height="60" rx="6" fill="#FFFFFF" opacity="0.95"/>
+    
+    <!-- Bus Windows -->
+    <rect x="110" y="130" width="25" height="20" rx="3" fill="#F59E0B" opacity="0.25"/>
+    <rect x="145" y="130" width="25" height="20" rx="3" fill="#F59E0B" opacity="0.25"/>
+    <rect x="180" y="130" width="25" height="20" rx="3" fill="#F59E0B" opacity="0.25"/>
+    
+    <!-- Bus Wheels -->
+    <circle cx="115" cy="250" r="18" fill="#1F2937"/>
+    <circle cx="185" cy="250" r="18" fill="#1F2937"/>
+    <circle cx="115" cy="250" r="9" fill="#FFFFFF" opacity="0.4"/>
+    <circle cx="185" cy="250" r="9" fill="#FFFFFF" opacity="0.4"/>
+    
+    <!-- Navigation Arrow (Forward Motion) -->
+    <path d="M 198 150 L 240 150 M 225 130 L 240 150 L 225 170" stroke="#F59E0B" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- GPS/Navigation Indicator Dots -->
+    <circle cx="60" cy="90" r="12" fill="#10B981"/>
+    <circle cx="60" cy="90" r="22" fill="#10B981" opacity="0.3"/>
+  </g>
+  
+  <!-- Text: Navi-GO - Centered below icon -->
+  <g id="logo-text" transform="translate(512, 650)">
+    <text x="-120" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="80" font-weight="700" fill="#1F2937" text-anchor="middle" letter-spacing="-2">Navi</text>
+    <text x="120" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="80" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="-2">GO</text>
+  </g>
+</svg>

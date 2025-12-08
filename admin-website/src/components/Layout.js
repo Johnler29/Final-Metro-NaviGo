@@ -31,22 +31,22 @@ const Layout = () => {
   }
 
   return (
-    <div className="flex h-screen bg-neutral-50 overflow-hidden">
+    <div className="flex min-h-screen bg-neutral-50">
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col">
         {/* Header */}
         <Header onMenuClick={() => setSidebarOpen(true)} />
         
         {/* Page content */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-neutral-50">
+        <main className="flex-1 overflow-x-hidden bg-neutral-50">
           <div 
-            className={`container mx-auto px-6 py-8 transition-all duration-300 ${
+            className={`w-full max-w-[1280px] mx-auto px-6 py-8 transition-opacity duration-300 ${
               isPageTransitioning 
-                ? 'opacity-0 translate-y-2' 
-                : 'opacity-100 translate-y-0'
+                ? 'opacity-0' 
+                : 'opacity-100'
             }`}
           >
             <div className="animate-fade-in">

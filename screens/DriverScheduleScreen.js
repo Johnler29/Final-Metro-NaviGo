@@ -114,10 +114,6 @@ export default function DriverScheduleScreen({ navigation }) {
     Alert.alert('Profile', 'Driver profile screen coming soon!');
   };
 
-  const handleMenuPress = () => {
-    // Drawer removed
-  };
-
   const handleRoleSwitch = () => {
     Alert.alert(
       'Switch to Passenger Mode',
@@ -242,12 +238,10 @@ export default function DriverScheduleScreen({ navigation }) {
       {/* Header */}
       <View style={styles.headerContainer}>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-            <Ionicons name="menu" size={24} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.placeholder} />
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>Work Schedule</Text>
-            <Text style={styles.headerSubtitle}>Metro NaviGo Driver</Text>
+            <Text style={styles.headerSubtitle}>NaviGO Bus Conductor</Text>
           </View>
           <TouchableOpacity style={styles.profileButton} onPress={handleProfilePress}>
             <Ionicons name="person-circle" size={28} color="#fff" />
@@ -338,13 +332,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  menuButton: {
+  placeholder: {
     width: 44,
     height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   headerCenter: {
     flex: 1,

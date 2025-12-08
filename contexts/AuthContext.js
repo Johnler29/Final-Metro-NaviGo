@@ -86,13 +86,29 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const signIn = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
-    });
-    
-    if (error) throw error;
-    return data;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+      
+      if (error) {
+        // Improve error message for JSON parse errors
+        if (error.message && error.message.includes('JSON Parse error')) {
+          const improvedError = new Error('Connection error. Please check your internet connection and verify your Supabase configuration.');
+          improvedError.originalError = error;
+          throw improvedError;
+        }
+        throw error;
+      }
+      return data;
+    } catch (error) {
+      // Re-throw with better error handling
+      if (error.message && error.message.includes('JSON Parse error')) {
+        throw new Error('Connection error. Please check your internet connection.');
+      }
+      throw error;
+    }
   };
 
   const signUp = async (email, password, userData = {}) => {

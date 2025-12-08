@@ -71,7 +71,7 @@ const Settings = () => {
   };
 
   const renderDatabaseSettings = () => (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Database Host</label>
@@ -126,7 +126,7 @@ const Settings = () => {
   );
 
   const renderNotificationSettings = () => (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -201,7 +201,7 @@ const Settings = () => {
   );
 
   const renderSecuritySettings = () => (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Session Timeout (minutes)</label>
@@ -274,7 +274,7 @@ const Settings = () => {
   );
 
   const renderGeneralSettings = () => (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">System Name</label>
@@ -374,10 +374,10 @@ const Settings = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600">Configure your MetroBus admin system settings</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">Settings</h1>
+        <p className="text-sm md:text-base text-gray-600 mt-1">Configure your MetroBus admin system settings</p>
       </div>
 
       {!activeSection ? (
@@ -389,7 +389,7 @@ const Settings = () => {
                 <div className="p-2 bg-blue-50 rounded-lg">
                   <Database className="w-6 h-6 text-blue-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 ml-3">Database</h3>
+                <h3 className="text-base md:text-lg font-semibold text-gray-900 ml-3">Database</h3>
               </div>
               <p className="text-gray-600 text-sm mb-4">
                 Configure database connections and backup settings
@@ -407,7 +407,7 @@ const Settings = () => {
                 <div className="p-2 bg-green-50 rounded-lg">
                   <Bell className="w-6 h-6 text-green-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 ml-3">Notifications</h3>
+                <h3 className="text-base md:text-lg font-semibold text-gray-900 ml-3">Notifications</h3>
               </div>
               <p className="text-gray-600 text-sm mb-4">
                 Set up email and push notification preferences
@@ -425,7 +425,7 @@ const Settings = () => {
                 <div className="p-2 bg-yellow-50 rounded-lg">
                   <Shield className="w-6 h-6 text-yellow-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 ml-3">Security</h3>
+                <h3 className="text-base md:text-lg font-semibold text-gray-900 ml-3">Security</h3>
               </div>
               <p className="text-gray-600 text-sm mb-4">
                 Manage user permissions and security settings
@@ -443,7 +443,7 @@ const Settings = () => {
                 <div className="p-2 bg-purple-50 rounded-lg">
                   <Globe className="w-6 h-6 text-purple-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 ml-3">General</h3>
+                <h3 className="text-base md:text-lg font-semibold text-gray-900 ml-3">General</h3>
               </div>
               <p className="text-gray-600 text-sm mb-4">
                 Basic system configuration and preferences

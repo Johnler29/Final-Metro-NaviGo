@@ -22,9 +22,9 @@ export default function HelpScreen({ navigation }) {
       action: () => Alert.alert('Find Routes', 'Use the Route Search screen to find bus routes between locations.'),
     },
     {
-      title: 'Switch to driver mode',
+      title: 'Switch to bus conductor mode',
       icon: 'car',
-      action: () => Alert.alert('Driver Mode', 'Use the menu drawer to switch between passenger and driver modes.'),
+      action: () => Alert.alert('Bus Conductor Mode', 'Use the menu drawer to switch between passenger and bus conductor modes.'),
     },
     {
       title: 'Contact support',

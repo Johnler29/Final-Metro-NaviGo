@@ -8,8 +8,10 @@ import {
   Alert,
   Dimensions,
   PanResponder,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '../styles/uiTheme';
 
 const { width } = Dimensions.get('window');
 
@@ -22,12 +24,29 @@ const CapacityStatusModal = ({
   busInfo 
 }) => {
   const [capacity, setCapacity] = useState(currentCapacity);
+  const [pwdPassengers, setPwdPassengers] = useState(busInfo?.current_pwd_passengers || 0);
   const [isUpdating, setIsUpdating] = useState(false);
   const [sliderWidth, setSliderWidth] = useState(0);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [scaleAnim] = useState(new Animated.Value(0));
+  const [fadeAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
     setCapacity(currentCapacity);
   }, [currentCapacity]);
+
+  useEffect(() => {
+    setPwdPassengers(busInfo?.current_pwd_passengers || 0);
+  }, [busInfo?.current_pwd_passengers]);
+
+  // Reset animations when modal closes
+  useEffect(() => {
+    if (!visible && !showSuccessModal) {
+      scaleAnim.setValue(0);
+      fadeAnim.setValue(0);
+      setShowSuccessModal(false);
+    }
+  }, [visible, showSuccessModal]);
 
   // PanResponder for slider interaction
   const panResponder = PanResponder.create({
@@ -56,11 +75,31 @@ const CapacityStatusModal = ({
       return;
     }
     
+    // Validate PWD passengers don't exceed available seats
+    const maxPwdSeats = busInfo?.pwd_seats || 4;
+    if (pwdPassengers > maxPwdSeats) {
+      Alert.alert('Error', `PWD passengers cannot exceed ${maxPwdSeats} (total PWD seats available).`);
+      return;
+    }
+    
     setIsUpdating(true);
     try {
-      await onUpdateCapacity(busId, capacity);
-      Alert.alert('Success', 'Bus capacity updated successfully!');
-      onClose();
+      await onUpdateCapacity(busId, capacity, pwdPassengers);
+      // Show success modal with animation
+      setShowSuccessModal(true);
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
     } catch (error) {
       console.error('Error updating capacity:', error);
       // Show more specific error message if available
@@ -69,6 +108,26 @@ const CapacityStatusModal = ({
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  const handleSuccessClose = () => {
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowSuccessModal(false);
+      scaleAnim.setValue(0);
+      fadeAnim.setValue(0);
+      onClose();
+    });
   };
 
   const getCapacityColor = (percentage) => {
@@ -93,14 +152,15 @@ const CapacityStatusModal = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
+    <>
+      <Modal
+        visible={visible && !showSuccessModal}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.modalContainer}>
           <View style={styles.header}>
             <Text style={styles.title}>Bus Capacity Status</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -239,11 +299,70 @@ const CapacityStatusModal = ({
 
             <View style={styles.passengerCount}>
               <Text style={styles.passengerCountText}>
-                Estimated Passengers: {Math.round((capacity / 100) * 50)}
+                Estimated Passengers: {Math.round((capacity / 100) * (busInfo?.capacity || 50))}
               </Text>
               <Text style={styles.maxCapacityText}>
-                (Max Capacity: 50)
+                (Max Capacity: {busInfo?.capacity || 50})
               </Text>
+            </View>
+
+            {/* PWD Indicator */}
+            <View style={styles.pwdIndicator}>
+              <View style={styles.pwdHeader}>
+                <Ionicons name="accessibility" size={20} color="#3B82F6" />
+                <Text style={styles.pwdTitle}>PWD Passengers</Text>
+              </View>
+              
+              <View style={styles.pwdControls}>
+                <View style={styles.pwdInfoRow}>
+                  <Text style={styles.pwdLabel}>Current PWD:</Text>
+                  <Text style={styles.pwdValue}>
+                    {pwdPassengers}
+                  </Text>
+                </View>
+                
+                {/* PWD Adjustment Buttons */}
+                <View style={styles.pwdAdjustmentButtons}>
+                  <TouchableOpacity
+                    style={[styles.pwdAdjustButton, pwdPassengers === 0 && styles.pwdAdjustButtonDisabled]}
+                    onPress={() => setPwdPassengers(Math.max(0, pwdPassengers - 1))}
+                    disabled={pwdPassengers === 0}
+                  >
+                    <Ionicons name="remove" size={20} color={pwdPassengers === 0 ? "#9CA3AF" : "#3B82F6"} />
+                  </TouchableOpacity>
+                  
+                  <View style={styles.pwdCountDisplay}>
+                    <Text style={styles.pwdCountText}>{pwdPassengers}</Text>
+                  </View>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.pwdAdjustButton,
+                      pwdPassengers >= (busInfo?.pwd_seats || 4) && styles.pwdAdjustButtonDisabled
+                    ]}
+                    onPress={() => {
+                      const maxPwdSeats = busInfo?.pwd_seats || 4;
+                      setPwdPassengers(Math.min(maxPwdSeats, pwdPassengers + 1));
+                    }}
+                    disabled={pwdPassengers >= (busInfo?.pwd_seats || 4)}
+                  >
+                    <Ionicons 
+                      name="add" 
+                      size={20} 
+                      color={pwdPassengers >= (busInfo?.pwd_seats || 4) ? "#9CA3AF" : "#3B82F6"} 
+                    />
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.pwdInfoRow}>
+                  <Text style={styles.pwdLabel}>Available Seats:</Text>
+                  <Text style={[styles.pwdValue, styles.pwdValueAvailable]}>
+                    {(busInfo?.pwd_seats || 4) - pwdPassengers}
+                    {' / '}
+                    {busInfo?.pwd_seats || 4}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -266,7 +385,56 @@ const CapacityStatusModal = ({
           </View>
         </View>
       </View>
-    </Modal>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleSuccessClose}
+      >
+        <Animated.View 
+          style={[
+            styles.successOverlay,
+            { opacity: fadeAnim }
+          ]}
+        >
+          <Animated.View
+            style={[
+              styles.successModalContainer,
+              {
+                transform: [{ scale: scaleAnim }],
+              },
+            ]}
+          >
+            {/* Success Icon */}
+            <View style={styles.successIconContainer}>
+              <View style={styles.successIconCircle}>
+                <Ionicons name="checkmark" size={48} color="#FFFFFF" />
+              </View>
+            </View>
+
+            {/* Success Title */}
+            <Text style={styles.successTitle}>Success!</Text>
+
+            {/* Success Message */}
+            <Text style={styles.successMessage}>
+              Bus capacity updated successfully!
+            </Text>
+
+            {/* Success Button */}
+            <TouchableOpacity
+              style={styles.successButton}
+              onPress={handleSuccessClose}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.successButtonText}>Got it</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
+      </Modal>
+    </>
   );
 };
 
@@ -459,6 +627,80 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 2,
   },
+  pwdIndicator: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  pwdHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  pwdTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1E40AF',
+    marginLeft: 8,
+  },
+  pwdControls: {
+    gap: 12,
+  },
+  pwdAdjustmentButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    marginVertical: 8,
+  },
+  pwdAdjustButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#DBEAFE',
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pwdAdjustButtonDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#D1D5DB',
+  },
+  pwdCountDisplay: {
+    minWidth: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pwdCountText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
+  pwdInfo: {
+    gap: 8,
+  },
+  pwdInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pwdLabel: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  pwdValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
+  pwdValueAvailable: {
+    color: '#059669',
+  },
   actions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -491,6 +733,91 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'white',
     fontWeight: '600',
+  },
+  // Success Modal Styles - Consistent with NotificationModal
+  successOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  successModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
+    width: Math.min(width - 40, 340),
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  successIconContainer: {
+    marginBottom: 16,
+  },
+  successIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.brand,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: colors.brand,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 12,
+    textAlign: 'center',
+    lineHeight: 28,
+    letterSpacing: -0.3,
+  },
+  successMessage: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+    paddingHorizontal: 8,
+  },
+  successButton: {
+    backgroundColor: colors.brand,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    minWidth: 120,
+    minHeight: 48,
+    shadowColor: colors.brand,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  successButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: 0.3,
   },
 });
 

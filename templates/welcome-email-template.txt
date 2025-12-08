@@ -1,0 +1,28 @@
+Welcome to NaviGO!
+
+Hi {{name}},
+
+Thank you for creating an account with NaviGO! We're excited to have you on board.
+
+Your account has been successfully created and you can now:
+
+• Track Buses in Real-Time
+  See live bus locations and get accurate arrival times
+
+• Plan Your Route
+  Find the best routes and stops for your journey
+
+• Get Notifications
+  Receive alerts about your bus arrivals and route changes
+
+Get started: {{app_url}}
+
+If you have any questions or need help, please don't hesitate to contact our support team.
+
+Best regards,
+The NaviGO Team
+
+---
+This email was sent to {{email}} because you created an account with NaviGO.
+If you didn't create this account, please contact support.
+

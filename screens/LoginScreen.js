@@ -16,6 +16,7 @@ import { useSupabase } from '../contexts/SupabaseContext';
 import { supabase } from '../lib/supabase';
 import { validatePassword, getPasswordRequirements, DEFAULT_PASSWORD_OPTIONS } from '../utils/passwordValidation';
 import PasswordRequirementsModal from '../components/PasswordRequirementsModal';
+import NotificationModal from '../components/NotificationModal';
 
 // Optional prop: onSwitchToDriver lets the user choose to log in as a driver instead of passenger
 export default function LoginScreen({ onSwitchToDriver }) {
@@ -26,6 +27,14 @@ export default function LoginScreen({ onSwitchToDriver }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [notificationModal, setNotificationModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    buttons: null,
+    type: 'default',
+    icon: null,
+  });
 
   const { signIn, signUp, resetPassword } = useAuth();
   const { createUser } = useSupabase();
@@ -41,20 +50,60 @@ export default function LoginScreen({ onSwitchToDriver }) {
       const data = await signIn(email.trim(), password);
 
       if (!data || !data.user) {
-        Alert.alert('Login Error', 'Unable to log in. Please check your credentials.');
+        setNotificationModal({
+          visible: true,
+          title: 'Login Error',
+          message: 'Unable to log in. Please check your credentials.',
+          buttons: null,
+          type: 'error',
+          icon: 'alert-circle',
+        });
         return;
       }
 
-      Alert.alert('Success', 'Logged in successfully!');
+      setNotificationModal({
+        visible: true,
+        title: 'Success',
+        message: 'Logged in successfully!',
+        buttons: null,
+        type: 'success',
+        icon: 'checkmark-circle',
+      });
       // The app will automatically navigate to the main interface
       // because the AuthContext will detect the user is logged in
     } catch (error) {
-      const message =
-        error?.message?.includes('Invalid login credentials') ||
-        error?.message?.includes('invalid login credentials')
-          ? 'Invalid email or password. Please try again.'
-          : error?.message || 'Login failed. Please try again.';
-      Alert.alert('Login Error', message);
+      console.error('Login error details:', error);
+      
+      let message = 'Login failed. Please try again.';
+      
+      // Handle different error types
+      if (error?.message) {
+        if (error.message.includes('Invalid login credentials') || 
+            error.message.includes('invalid login credentials')) {
+          message = 'Invalid email or password. Please try again.';
+        } else if (error.message.includes('JSON Parse error') || 
+                   error.message.includes('Unexpected character')) {
+          message = 'Connection error. Please check your internet connection and try again.';
+        } else if (error.message.includes('Network request failed') ||
+                   error.message.includes('Failed to fetch')) {
+          message = 'Network error. Please check your internet connection.';
+        } else {
+          message = error.message;
+        }
+      } else if (error?.error_description) {
+        message = error.error_description;
+      } else if (typeof error === 'string') {
+        message = error;
+      }
+      
+      setNotificationModal({
+        visible: true,
+        title: 'Login Error',
+        message: message,
+        buttons: null,
+        type: 'error',
+        icon: 'alert-circle',
+      });
     } finally {
       setLoading(false);
     }
@@ -110,11 +159,31 @@ export default function LoginScreen({ onSwitchToDriver }) {
         [{ text: 'OK' }]
       );
     } catch (error) {
-      const message =
-        error?.message?.includes('already registered') ||
-        error?.message?.includes('already exists')
-          ? 'An account with this email already exists. Try logging in instead.'
-          : error?.message || 'Sign up failed. Please try again.';
+      console.error('Sign up error details:', error);
+      
+      let message = 'Sign up failed. Please try again.';
+      
+      // Handle different error types
+      if (error?.message) {
+        if (error.message.includes('already registered') || 
+            error.message.includes('already exists') ||
+            error.message.includes('User already registered')) {
+          message = 'An account with this email already exists. Try logging in instead.';
+        } else if (error.message.includes('JSON Parse error') || 
+                   error.message.includes('Unexpected character')) {
+          message = 'Connection error. Please check your internet connection and try again.';
+        } else if (error.message.includes('Network request failed') ||
+                   error.message.includes('Failed to fetch')) {
+          message = 'Network error. Please check your internet connection.';
+        } else {
+          message = error.message;
+        }
+      } else if (error?.error_description) {
+        message = error.error_description;
+      } else if (typeof error === 'string') {
+        message = error;
+      }
+      
       Alert.alert('Sign Up Error', message);
     } finally {
       setLoading(false);
@@ -172,11 +241,31 @@ export default function LoginScreen({ onSwitchToDriver }) {
         [{ text: 'OK' }]
       );
     } catch (error) {
-      const message =
-        error?.message?.includes('not found') ||
-        error?.message?.includes('does not exist')
-          ? 'No account found with this email address.'
-          : error?.message || 'Failed to send password reset email. Please try again.';
+      console.error('Password reset error details:', error);
+      
+      let message = 'Failed to send password reset email. Please try again.';
+      
+      // Handle different error types
+      if (error?.message) {
+        if (error.message.includes('not found') || 
+            error.message.includes('does not exist') ||
+            error.message.includes('user not found')) {
+          message = 'No account found with this email address.';
+        } else if (error.message.includes('JSON Parse error') || 
+                   error.message.includes('Unexpected character')) {
+          message = 'Connection error. Please check your internet connection and try again.';
+        } else if (error.message.includes('Network request failed') ||
+                   error.message.includes('Failed to fetch')) {
+          message = 'Network error. Please check your internet connection.';
+        } else {
+          message = error.message;
+        }
+      } else if (error?.error_description) {
+        message = error.error_description;
+      } else if (typeof error === 'string') {
+        message = error;
+      }
+      
       Alert.alert('Error', message);
     } finally {
       setLoading(false);
@@ -193,7 +282,7 @@ export default function LoginScreen({ onSwitchToDriver }) {
           <View style={styles.logoContainer}>
             <Ionicons name="bus" size={52} color="#fff" />
           </View>
-          <Text style={styles.title}>Metro NaviGo</Text>
+          <Text style={styles.title}>NaviGO</Text>
           <Text style={styles.subtitle}>
             Sign in as a passenger or choose driver login
           </Text>
@@ -340,7 +429,7 @@ export default function LoginScreen({ onSwitchToDriver }) {
                 color="#1F2933"
               />
               <Text style={styles.driverButtonText}>
-                Driver login
+                Bus Conductor login
               </Text>
             </TouchableOpacity>
           )}
@@ -369,6 +458,17 @@ export default function LoginScreen({ onSwitchToDriver }) {
         onClose={() => setShowPasswordModal(false)}
         password={password}
         options={DEFAULT_PASSWORD_OPTIONS}
+      />
+
+      {/* Notification Modal */}
+      <NotificationModal
+        visible={notificationModal.visible}
+        title={notificationModal.title}
+        message={notificationModal.message}
+        buttons={notificationModal.buttons}
+        type={notificationModal.type}
+        icon={notificationModal.icon}
+        onPress={() => setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null })}
       />
     </KeyboardAvoidingView>
   );

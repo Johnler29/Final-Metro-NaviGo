@@ -1,10 +1,10 @@
-# Metro Link Tracker 🚌
+# NaviGO 🚌
 
 A comprehensive real-time bus tracking system with mobile app, admin dashboard, and backend infrastructure. Built with React Native, Expo, React, and Supabase.
 
 ## 🌟 Project Overview
 
-Metro Link Tracker is a complete bus tracking solution consisting of:
+NaviGO is a complete bus tracking solution consisting of:
 - **Mobile App** - React Native app for passengers
 - **Admin Dashboard** - React web app for fleet management
 - **Backend** - Supabase database with real-time capabilities
@@ -20,7 +20,7 @@ Metro Link Tracker is a complete bus tracking solution consisting of:
 - **Modern UI/UX** - Beautiful gradient design with accessibility features
 
 ### 🖥️ Admin Dashboard
-- **Fleet Management** - Bus management, driver assignments, maintenance scheduling
+- **Fleet Management** - Bus management, bus conductor assignments, maintenance scheduling
 - **Route Management** - Route creation, stop management, fare management
 - **Driver Management** - Driver profiles, assignments, performance tracking
 - **Analytics** - Real-time system overview, performance metrics, financial reports
@@ -185,19 +185,19 @@ REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 ### Core Tables
 - **`routes`** - Bus routes with origin, destination, fare, and duration
-- **`drivers`** - Driver information and contact details
+- **`drivers`** - Bus conductor information and contact details
 - **`buses`** - Bus fleet with capacity, status, and assignments
 - **`stops`** - Bus stops with coordinates and route sequences
 - **`schedules`** - Timetables for buses on specific routes
 - **`users`** - Passenger information and preferences
 - **`location_updates`** - Real-time location data for buses
-- **`driver_sessions`** - Driver authentication sessions
+- **`driver_sessions`** - Bus conductor authentication sessions
 - **`feedback`** - User feedback and ratings
 
 ### Key Features
 - **Real-time Updates** - Live bus tracking with WebSocket connections
 - **Security** - Row Level Security (RLS) for data protection
-- **Authentication** - User and driver authentication systems
+- **Authentication** - User and bus conductor authentication systems
 - **Location Tracking** - GPS coordinates with accuracy tracking
 - **Capacity Management** - PWD seat availability and bus capacity
 
@@ -244,8 +244,8 @@ npm run test          # Run tests
 4. **Monitor performance** with analytics and reports
 5. **Handle feedback** and user support
 
-### For Drivers
-1. **Login** with driver credentials
+### For Bus Conductors
+1. **Login** with bus conductor credentials
 2. **Start session** and get assigned to a bus
 3. **Update location** in real-time
 4. **Report issues** and maintenance needs
@@ -255,7 +255,7 @@ npm run test          # Run tests
 
 ### Demo Credentials
 - **Admin**: admin@metrobus.com / admin123
-- **Driver**: gab.nakar@metrobus.com / demo123
+- **Bus Conductor**: gab.nakar@metrobus.com / demo123
 - **Passenger**: Use the mobile app registration
 
 ### Security Features
@@ -354,6 +354,6 @@ For support and questions:
 
 ---
 
-**MetroBus Tracker** - Complete bus tracking solution for modern public transportation! 🚌✨
+**NaviGO** - Complete bus tracking solution for modern public transportation! 🚌✨
 
 *Made with ❤️ for better public transportation experience*

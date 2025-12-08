@@ -9,7 +9,7 @@ export const colors = {
   textPrimary: '#000000',
   textSecondary: '#333333',
   textMuted: '#9CA3AF',
-  /** Primary Metro Link orange */
+  /** Primary NaviGO orange */
   brand: '#F4A300',
   brandSoft: '#FEF3C7',
   brandSoftStrong: '#FDBA74',

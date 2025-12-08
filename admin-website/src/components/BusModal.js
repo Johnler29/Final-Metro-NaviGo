@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Bus, MapPin, User, Navigation } from 'lucide-react';
+import Modal from './Modal';
 
 const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -115,28 +116,38 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center">
-            <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center mr-3">
-              <Bus className="w-5 h-5 text-primary-600" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900">
-              {bus ? 'Edit Bus' : 'Add New Bus'}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
+  const titleId = 'bus-modal-title';
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+  return (
+    <Modal
+      onClose={onClose}
+      closeOnBackdrop={false}
+      size="lg"
+      ariaLabelledby={titleId}
+    >
+      {({ close }) => (
+        <>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div className="flex items-center">
+              <div className="w-10 h-10 bg-primary-100 rounded-2xl flex items-center justify-center mr-3">
+                <Bus className="w-5 h-5 text-primary-600" />
+              </div>
+              <h2 id={titleId} className="text-lg md:text-xl font-semibold text-gray-900">
+                {bus ? 'Edit Bus' : 'Add New Bus'}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={close}
+              className="inline-flex items-center justify-center rounded-full p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary-500 transition-colors"
+              aria-label="Close bus modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="px-6 py-4 md:py-6 space-y-6 overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
             {/* Bus Number */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -147,9 +158,9 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
                 name="bus_number"
                 value={formData.bus_number}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                  errors.bus_number ? 'border-red-300' : 'border-gray-300'
-                }`}
+                  className={`modern-input w-full ${
+                    errors.bus_number ? 'border-red-300 focus:ring-red-200 focus:border-red-400' : ''
+                  }`}
                 placeholder="e.g., 001, 002"
               />
               {errors.bus_number && (
@@ -167,8 +178,8 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                  errors.name ? 'border-red-300' : 'border-gray-300'
+                className={`modern-input w-full ${
+                  errors.name ? 'border-red-300 focus:ring-red-200 focus:border-red-400' : ''
                 }`}
                 placeholder="e.g., Metro Link Bus #001"
               />
@@ -188,8 +199,8 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
                 value={formData.capacity}
                 onChange={handleChange}
                 min="1"
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                  errors.capacity ? 'border-red-300' : 'border-gray-300'
+                className={`modern-input w-full ${
+                  errors.capacity ? 'border-red-300 focus:ring-red-200 focus:border-red-400' : ''
                 }`}
               />
               {errors.capacity && (
@@ -208,7 +219,7 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
                 name="route_id"
                 value={formData.route_id}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="modern-input w-full"
               >
                 <option value="">Select a route</option>
                 {routes.map(route => (
@@ -219,17 +230,17 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
               </select>
             </div>
 
-            {/* Driver */}
+            {/* Bus Conductor */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <User className="w-4 h-4 inline mr-1" />
-                Driver
+                Bus Conductor
               </label>
               <select
                 name="driver_id"
                 value={formData.driver_id}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="modern-input w-full"
               >
                 <option value="">Select a driver</option>
                 {drivers.map(driver => (
@@ -241,8 +252,8 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
             </div>
           </div>
 
-          {/* Location Section */}
-          <div className="border-t border-gray-200 pt-6">
+            {/* Location Section */}
+            <div className="border-t border-gray-100 pt-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900 flex items-center">
                 <MapPin className="w-5 h-5 mr-2 text-primary-500" />
@@ -272,8 +283,8 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
                   onChange={handleChange}
                   step="any"
                   disabled={!manualOverride}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                    errors.latitude ? 'border-red-300' : 'border-gray-300'
+                  className={`modern-input w-full ${
+                    errors.latitude ? 'border-red-300 focus:ring-red-200 focus:border-red-400' : ''
                   }`}
                   placeholder="14.5995"
                 />
@@ -293,9 +304,9 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
                   onChange={handleChange}
                   step="any"
                   disabled={!manualOverride}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                    errors.longitude ? 'border-red-300' : 'border-gray-300'
-                  }`}
+                className={`modern-input w-full ${
+                  errors.longitude ? 'border-red-300 focus:ring-red-200 focus:border-red-400' : ''
+                }`}
                   placeholder="120.9842"
                 />
                 {errors.longitude && (
@@ -315,7 +326,7 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
                   min="0"
                   step="0.1"
                   disabled={!manualOverride}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="modern-input w-full"
                 />
               </div>
 
@@ -331,32 +342,33 @@ const BusModal = ({ bus, routes, drivers, onClose, onSave }) => {
                   min="0"
                   max="360"
                   disabled={!manualOverride}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="modern-input w-full"
                 />
               </div>
 
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
-            >
-              {bus ? 'Update Bus' : 'Create Bus'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+            {/* Actions */}
+            <div className="flex justify-end space-x-3 pt-6 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={close}
+                className="modern-button btn-secondary px-4 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="modern-button px-4 py-2 text-sm"
+              >
+                {bus ? 'Update Bus' : 'Create Bus'}
+              </button>
+            </div>
+          </form>
+        </>
+      )}
+    </Modal>
   );
 };
 

@@ -3,6 +3,7 @@ import { X, Save, Plus, Trash2, MapPin, Edit2, Navigation, Loader } from 'lucide
 import { useSupabase } from '../contexts/SupabaseContext';
 import { toast } from 'react-hot-toast';
 import { updateRouteCoordinates } from '../utils/routeDirections';
+import Modal from './Modal';
 
 const StopManagementModal = ({ route, onClose }) => {
   const { supabase, stops, refreshData } = useSupabase();
@@ -164,21 +165,21 @@ const StopManagementModal = ({ route, onClose }) => {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        {/* Background overlay */}
-        <div 
-          className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
-          onClick={onClose}
-        />
+  const titleId = 'stop-management-modal-title';
 
-        {/* Modal panel */}
-        <div className="inline-block w-full max-w-4xl my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl">
+  return (
+    <Modal
+      onClose={onClose}
+      closeOnBackdrop={true}
+      size="xl"
+      ariaLabelledby={titleId}
+    >
+      {({ close }) => (
+        <>
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 id={titleId} className="text-lg font-semibold text-gray-900">
                 Manage Stops for {route?.name}
               </h3>
               <p className="text-sm text-gray-500 mt-1">
@@ -187,6 +188,7 @@ const StopManagementModal = ({ route, onClose }) => {
             </div>
             <div className="flex items-center space-x-3">
               <button
+                type="button"
                 onClick={() => handleRegenerateRoute(false)}
                 disabled={generatingRoute || routeStops.length < 2}
                 className="flex items-center space-x-2 px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -200,8 +202,10 @@ const StopManagementModal = ({ route, onClose }) => {
                 <span>Generate Route Path</span>
               </button>
               <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                type="button"
+                onClick={close}
+                className="inline-flex items-center justify-center rounded-full p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary-500 transition-colors"
+                aria-label="Close stop management modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -211,7 +215,7 @@ const StopManagementModal = ({ route, onClose }) => {
           {/* Content */}
           <div className="px-6 py-4 max-h-[600px] overflow-y-auto">
             {/* Add New Stop Form */}
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100">
               <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
                 <Plus className="w-4 h-4 mr-2" />
                 Add New Stop
@@ -223,7 +227,7 @@ const StopManagementModal = ({ route, onClose }) => {
                     placeholder="Stop Name *"
                     value={newStop.name}
                     onChange={(e) => setNewStop({ ...newStop, name: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="modern-input w-full text-sm"
                   />
                 </div>
                 <div>
@@ -232,7 +236,7 @@ const StopManagementModal = ({ route, onClose }) => {
                     placeholder="Address"
                     value={newStop.address}
                     onChange={(e) => setNewStop({ ...newStop, address: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="modern-input w-full text-sm"
                   />
                 </div>
                 <div>
@@ -242,7 +246,7 @@ const StopManagementModal = ({ route, onClose }) => {
                     placeholder="Latitude *"
                     value={newStop.latitude}
                     onChange={(e) => setNewStop({ ...newStop, latitude: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="modern-input w-full text-sm"
                   />
                 </div>
                 <div>
@@ -252,14 +256,15 @@ const StopManagementModal = ({ route, onClose }) => {
                     placeholder="Longitude *"
                     value={newStop.longitude}
                     onChange={(e) => setNewStop({ ...newStop, longitude: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="modern-input w-full text-sm"
                   />
                 </div>
               </div>
               <div className="mt-3 flex justify-end">
                 <button
+                  type="button"
                   onClick={handleAddStop}
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 flex items-center space-x-2"
+                  className="modern-button px-4 py-2 text-sm flex items-center space-x-2"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add Stop</span>
@@ -281,7 +286,7 @@ const StopManagementModal = ({ route, onClose }) => {
                 routeStops.map((stop, index) => (
                   <div
                     key={stop.id}
-                    className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                    className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-elevation-1 transition-shadow"
                   >
                     {editingStop === stop.id ? (
                       // Edit Mode
@@ -291,31 +296,32 @@ const StopManagementModal = ({ route, onClose }) => {
                             type="text"
                             defaultValue={stop.stop_name || stop.name}
                             onBlur={(e) => handleUpdateStop(stop.id, { name: e.target.value })}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            className="modern-input w-full text-sm"
                           />
                           <input
                             type="text"
                             defaultValue={stop.stop_description || stop.address}
                             onBlur={(e) => handleUpdateStop(stop.id, { address: e.target.value })}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            className="modern-input w-full text-sm"
                           />
                           <input
                             type="number"
                             step="0.000001"
                             defaultValue={stop.latitude}
                             onBlur={(e) => handleUpdateStop(stop.id, { latitude: parseFloat(e.target.value) })}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            className="modern-input w-full text-sm"
                           />
                           <input
                             type="number"
                             step="0.000001"
                             defaultValue={stop.longitude}
                             onBlur={(e) => handleUpdateStop(stop.id, { longitude: parseFloat(e.target.value) })}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            className="modern-input w-full text-sm"
                           />
                         </div>
                         <div className="flex justify-end">
                           <button
+                            type="button"
                             onClick={() => setEditingStop(null)}
                             className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
                           >
@@ -348,6 +354,7 @@ const StopManagementModal = ({ route, onClose }) => {
                         <div className="flex items-center space-x-2">
                           {index > 0 && (
                             <button
+                              type="button"
                               onClick={() => handleReorderStop(stop.id, index)}
                               className="text-gray-400 hover:text-gray-600"
                               title="Move up"
@@ -357,6 +364,7 @@ const StopManagementModal = ({ route, onClose }) => {
                           )}
                           {index < routeStops.length - 1 && (
                             <button
+                              type="button"
                               onClick={() => handleReorderStop(stop.id, index + 2)}
                               className="text-gray-400 hover:text-gray-600"
                               title="Move down"
@@ -365,12 +373,14 @@ const StopManagementModal = ({ route, onClose }) => {
                             </button>
                           )}
                           <button
+                            type="button"
                             onClick={() => setEditingStop(stop.id)}
                             className="text-blue-600 hover:text-blue-800"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleDeleteStop(stop.id)}
                             className="text-red-600 hover:text-red-800"
                           >
@@ -386,17 +396,18 @@ const StopManagementModal = ({ route, onClose }) => {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end space-x-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-end space-x-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
             <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+              type="button"
+              onClick={close}
+              className="modern-button px-4 py-2 text-sm"
             >
               Done
             </button>
           </div>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    </Modal>
   );
 };
 

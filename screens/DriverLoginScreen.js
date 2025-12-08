@@ -13,12 +13,21 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useSupabase } from '../contexts/SupabaseContext';
+import NotificationModal from '../components/NotificationModal';
 
 export default function DriverLoginScreen({ navigation, onLoginSuccess, onBackToPassenger }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [notificationModal, setNotificationModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    buttons: null,
+    type: 'default',
+    icon: null,
+  });
 
   const { authenticateDriver } = useSupabase();
 
@@ -56,23 +65,71 @@ export default function DriverLoginScreen({ navigation, onLoginSuccess, onBackTo
           console.error('Error storing driver session or clearing trip:', storageError);
         }
         
-        Alert.alert('Success', 'Login successful!', [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Call the success callback to update authentication state
-              if (onLoginSuccess) {
-                onLoginSuccess();
+        setNotificationModal({
+          visible: true,
+          title: 'Success',
+          message: 'Login successful!',
+          buttons: [
+            {
+              text: 'OK',
+              onPress: () => {
+                setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null });
+                // Call the success callback to update authentication state
+                if (onLoginSuccess) {
+                  onLoginSuccess();
+                }
               }
             }
-          }
-        ]);
+          ],
+          type: 'success',
+          icon: 'checkmark-circle',
+        });
       } else {
-        Alert.alert('Error', 'Invalid credentials. Please try again.');
+        setNotificationModal({
+          visible: true,
+          title: 'Error',
+          message: 'Invalid credentials. Please try again.',
+          buttons: null,
+          type: 'error',
+          icon: 'alert-circle',
+        });
       }
     } catch (error) {
-      console.error('Login error:', error);
-      Alert.alert('Error', 'Login failed. Please try again.');
+      console.error('Login error details:', error);
+      
+      let message = 'Login failed. Please try again.';
+      
+      // Handle different error types
+      if (error?.message) {
+        if (error.message.includes('Invalid credentials') || 
+            error.message.includes('Invalid login credentials')) {
+          message = 'Invalid email or password. Please try again.';
+        } else if (error.message.includes('JSON Parse error') || 
+                   error.message.includes('Unexpected character')) {
+          message = 'Connection error. Please check your internet connection and try again.';
+        } else if (error.message.includes('Network request failed') ||
+                   error.message.includes('Failed to fetch')) {
+          message = 'Network error. Please check your internet connection.';
+        } else if (error.message.includes('not found') ||
+                   error.message.includes('does not exist')) {
+          message = 'No bus conductor account found with this email.';
+        } else {
+          message = error.message;
+        }
+      } else if (error?.error_description) {
+        message = error.error_description;
+      } else if (typeof error === 'string') {
+        message = error;
+      }
+      
+      setNotificationModal({
+        visible: true,
+        title: 'Login Error',
+        message: message,
+        buttons: null,
+        type: 'error',
+        icon: 'alert-circle',
+      });
     } finally {
       setLoading(false);
     }
@@ -100,8 +157,8 @@ export default function DriverLoginScreen({ navigation, onLoginSuccess, onBackTo
           <View style={styles.logoContainer}>
             <Ionicons name="bus" size={52} color="#fff" />
           </View>
-          <Text style={styles.title}>Metro NaviGo Driver</Text>
-          <Text style={styles.subtitle}>Driver Login</Text>
+          <Text style={styles.title}>NaviGO Bus Conductor</Text>
+          <Text style={styles.subtitle}>Bus Conductor Login</Text>
         </View>
 
         <View style={styles.form}>
@@ -109,7 +166,7 @@ export default function DriverLoginScreen({ navigation, onLoginSuccess, onBackTo
             <Ionicons name="mail" size={20} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Driver Email"
+              placeholder="Bus Conductor Email"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -159,6 +216,17 @@ export default function DriverLoginScreen({ navigation, onLoginSuccess, onBackTo
         </View>
 
       </View>
+
+      {/* Notification Modal */}
+      <NotificationModal
+        visible={notificationModal.visible}
+        title={notificationModal.title}
+        message={notificationModal.message}
+        buttons={notificationModal.buttons}
+        type={notificationModal.type}
+        icon={notificationModal.icon}
+        onPress={() => setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null })}
+      />
     </KeyboardAvoidingView>
   );
 }

@@ -1,7 +1,7 @@
 {
-  "name": "metro-link-admin",
+  "name": "navigo-admin",
   "version": "1.0.0",
-  "description": "Metro Link Tracker Admin Dashboard",
+  "description": "NaviGO Admin Dashboard",
   "private": true,
   "dependencies": {
     "@supabase/supabase-js": "^2.38.0",

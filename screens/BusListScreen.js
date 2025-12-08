@@ -45,10 +45,10 @@ export default function BusListScreen({ navigation, route }) {
       
       if (error) {
         console.warn('⚠️ Real-time function not available, using basic bus data:', error);
-        // Fallback to basic bus data
+        // Fallback to basic bus data - include PWD fields
         const { data: busData, error: busError } = await supabase
           .from('buses')
-          .select('*')
+          .select('*, pwd_seats, current_pwd_passengers, pwd_seats_available')
           .eq('status', 'active');
         
         if (busError) throw busError;
@@ -73,6 +73,74 @@ export default function BusListScreen({ navigation, route }) {
   useEffect(() => {
     loadRealtimeBuses();
   }, [refreshing]);
+
+  // Subscribe to real-time bus updates (capacity, PWD, location)
+  useEffect(() => {
+    if (!supabase || buses.length === 0) return;
+
+    console.log('🔔 Setting up real-time subscription for bus capacity updates');
+    
+    const channel = supabase
+      .channel('bus-capacity-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'buses',
+          filter: `status=eq.active`
+        },
+        (payload) => {
+          console.log('📡 Real-time bus update received:', payload);
+          
+          // Update capacity status for the specific bus
+          if (payload.new) {
+            const updatedBus = payload.new;
+            setBusCapacityStatus(prev => ({
+              ...prev,
+              [updatedBus.id]: {
+                id: updatedBus.id,
+                current_passengers: updatedBus.current_passengers || 0,
+                capacity_percentage: updatedBus.capacity_percentage || 0,
+                max_capacity: updatedBus.capacity || 50,
+                current_pwd_passengers: updatedBus.current_pwd_passengers || 0,
+                pwd_seats_available: updatedBus.pwd_seats_available !== undefined 
+                  ? updatedBus.pwd_seats_available 
+                  : (updatedBus.pwd_seats || 4) - (updatedBus.current_pwd_passengers || 0),
+                pwd_seats: updatedBus.pwd_seats || 4,
+              }
+            }));
+
+            // Also update realtimeBuses if the bus is in the list
+            setRealtimeBuses(prev => {
+              const existingIndex = prev.findIndex(b => (b.bus_id || b.id) === updatedBus.id);
+              if (existingIndex >= 0) {
+                const updated = [...prev];
+                updated[existingIndex] = {
+                  ...updated[existingIndex],
+                  capacity_percentage: updatedBus.capacity_percentage,
+                  current_passengers: updatedBus.current_passengers,
+                  current_pwd_passengers: updatedBus.current_pwd_passengers,
+                  pwd_seats_available: updatedBus.pwd_seats_available !== undefined 
+                    ? updatedBus.pwd_seats_available 
+                    : (updatedBus.pwd_seats || 4) - (updatedBus.current_pwd_passengers || 0),
+                  pwd_seats: updatedBus.pwd_seats || 4,
+                };
+                return updated;
+              }
+              return prev;
+            });
+
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔕 Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, buses.length]);
 
   const loadCapacityStatus = async () => {
     try {
@@ -199,8 +267,23 @@ export default function BusListScreen({ navigation, route }) {
       capacity: busData.max_capacity || capacityData?.max_capacity || bus.capacity || 45,
       capacityPercentage: busData.capacity_percentage || capacityData?.capacity_percentage || bus.capacity_percentage || 0,
       capacityStatus: busData.capacity_status || capacityData?.capacity_status || capacityStatus.status,
-      pwdSeats: bus.pwd_seats || 4,
-      pwdSeatsAvailable: bus.pwd_seats_available || 2,
+      pwdSeats: busData.pwd_seats || capacityData?.pwd_seats || bus.pwd_seats || 4,
+      pwdSeatsAvailable: (() => {
+        // Priority: busData > capacityData > bus > calculated
+        if (busData.pwd_seats_available !== undefined) {
+          return busData.pwd_seats_available;
+        }
+        if (capacityData?.pwd_seats_available !== undefined) {
+          return capacityData.pwd_seats_available;
+        }
+        if (bus.pwd_seats_available !== undefined) {
+          return bus.pwd_seats_available;
+        }
+        // Calculate from available data
+        const totalPwdSeats = busData.pwd_seats || capacityData?.pwd_seats || bus.pwd_seats || 4;
+        const currentPwd = busData.current_pwd_passengers || capacityData?.current_pwd_passengers || bus.current_pwd_passengers || 0;
+        return Math.max(0, totalPwdSeats - currentPwd);
+      })(),
       eta: bus.estimated_arrival || '5 min',
       distance: bus.distance || '2.3 km',
       latitude: busData.latitude || bus.latitude || 37.78825,

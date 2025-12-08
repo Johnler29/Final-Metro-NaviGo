@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Bus, Eye, EyeOff, Info } from 'lucide-react';
+import { Eye, EyeOff, Info } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import NaviGoLogo from '../components/Logo';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -36,17 +37,14 @@ const Login = () => {
         {/* Logo */}
         <div className="flex justify-center mb-8">
           <div className="relative">
-            <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center 
-                          shadow-lg hover:shadow-xl transition-all duration-300">
-              <Bus className="w-9 h-9 text-white" />
-            </div>
+            <NaviGoLogo variant="icon" className="w-16 h-16" />
           </div>
         </div>
         
         {/* Header */}
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Metro NaviGo Admin
+            Navi-GO Admin
           </h1>
           <p className="text-base text-gray-600">
             Sign in to manage your fleet
@@ -188,7 +186,7 @@ const Login = () => {
 
         {/* Footer */}
         <p className="mt-6 text-center text-sm text-gray-500">
-          © 2025 Metro NaviGo. All rights reserved.
+          © 2025 Navi-GO. All rights reserved.
         </p>
       </div>
     </div>

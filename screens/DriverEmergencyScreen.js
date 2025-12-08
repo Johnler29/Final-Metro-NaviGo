@@ -38,7 +38,7 @@ export default function DriverEmergencyScreen({ navigation }) {
     {
       id: 'medical',
       title: 'Medical Emergency',
-      description: 'Passenger or driver medical emergency',
+      description: 'Passenger or bus conductor medical emergency',
       icon: 'medical-bag',
       color: '#F44336',
       urgent: true,

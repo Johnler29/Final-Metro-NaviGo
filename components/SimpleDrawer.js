@@ -31,7 +31,7 @@ const SimpleDrawer = ({
       role: 'passenger',
     },
     {
-      title: 'Driver Mode',
+      title: 'Bus Conductor Mode',
       icon: 'car',
       screen: 'DriverTabs',
       role: 'driver',
@@ -204,7 +204,7 @@ const SimpleDrawer = ({
                     Current Mode
                   </Text>
                   <Text style={styles.statusValue} numberOfLines={1}>
-                    {currentRole === 'passenger' ? 'Passenger' : 'Driver'}
+                    {currentRole === 'passenger' ? 'Passenger' : 'Bus Conductor'}
                   </Text>
                 </View>
               </View>

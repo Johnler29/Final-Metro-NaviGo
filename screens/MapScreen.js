@@ -13,9 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import Constants from 'expo-constants';
 import { useSupabase } from '../contexts/SupabaseContext';
-import { supabaseHelpers } from '../lib/supabase';
+import { supabaseHelpers, supabase } from '../lib/supabase';
 import RealtimeBusMap from '../components/RealtimeBusMap';
-import SetAlarmModal from '../components/SetAlarmModal';
 import RouteInfoPanel from '../components/RouteInfoPanel';
 import PingModal from '../components/PingModal';
 import { getLocationStatus, getCapacityStatus, formatDistance, formatTime } from '../utils/locationUtils';
@@ -35,7 +34,6 @@ export default function MapScreen({ navigation, route }) {
   const [availableRoutes, setAvailableRoutes] = useState([]);
   const [selectedRouteId, setSelectedRouteId] = useState(null);
   const [showRouteSelector, setShowRouteSelector] = useState(false);
-  const [showSetAlarmModal, setShowSetAlarmModal] = useState(false);
   // Route planner state
   const [showRouteInfoPanel, setShowRouteInfoPanel] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState(null);
@@ -111,6 +109,297 @@ export default function MapScreen({ navigation, route }) {
     }
   }, [buses, routes]);
 
+  // Immediate real-time check when buses array changes (primary check)
+  useEffect(() => {
+    if (!selectedBusId) return;
+    
+    // Check immediately when buses array changes
+    const selectedBus = buses.find(b => b.id === selectedBusId);
+    if (selectedBus) {
+      const hasActiveDriver = selectedBus.driver_id && selectedBus.status === 'active';
+      if (!hasActiveDriver) {
+        console.log('🚫 Real-time check (buses): Driver is off duty - hiding modal immediately', {
+          busId: selectedBusId,
+          driver_id: selectedBus.driver_id,
+          status: selectedBus.status
+        });
+        setSelectedBusId(null);
+        setShowPingModal(false);
+        return;
+      }
+    } else {
+      // Bus not found in buses array - driver went off duty (bus was removed)
+      console.log('🚫 Real-time check (buses): Bus removed from context - driver is off duty', {
+        busId: selectedBusId
+      });
+      setSelectedBusId(null);
+      setShowPingModal(false);
+      return;
+    }
+  }, [buses, selectedBusId]);
+
+  // Also check mapBuses array for immediate updates (secondary check)
+  useEffect(() => {
+    if (!selectedBusId) return;
+    
+    // Check if bus is still in mapBuses (displayed buses)
+    const selectedMapBus = mapBuses.find(b => (b.id || b.bus_id) === selectedBusId);
+    if (!selectedMapBus) {
+      // Bus removed from mapBuses - driver went off duty
+      console.log('🚫 Real-time check (mapBuses): Bus removed from map - driver is off duty', {
+        busId: selectedBusId
+      });
+      setSelectedBusId(null);
+      setShowPingModal(false);
+    }
+  }, [mapBuses, selectedBusId]);
+
+  // Direct Supabase subscription for selected bus to catch status changes immediately
+  useEffect(() => {
+    if (!selectedBusId) return;
+
+    console.log('🔔 Setting up direct subscription for selected bus:', selectedBusId);
+    
+    const channel = supabase
+      .channel(`bus-status-${selectedBusId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'buses',
+          filter: `id=eq.${selectedBusId}`,
+        },
+        (payload) => {
+          console.log('📡 Direct bus status update received:', payload);
+          const updatedBus = payload.new;
+          
+          // Check if driver went off duty
+          const hasActiveDriver = updatedBus.driver_id && updatedBus.status === 'active';
+          
+          if (!hasActiveDriver) {
+            console.log('🚫 Direct subscription: Driver went off duty - hiding modal immediately', {
+              busId: selectedBusId,
+              driver_id: updatedBus.driver_id,
+              status: updatedBus.status
+            });
+            setSelectedBusId(null);
+            setShowPingModal(false);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔕 Cleaning up direct subscription for bus:', selectedBusId);
+      supabase.removeChannel(channel);
+    };
+  }, [selectedBusId]);
+
+  // Polling mechanism as fallback - check bus and driver status every 1 second
+  useEffect(() => {
+    if (!selectedBusId) return;
+
+    console.log('⏱️ Starting polling check for selected bus:', selectedBusId);
+    
+    const checkBusAndDriverStatus = async () => {
+      try {
+        // Query bus status directly from database
+        const { data: busData, error: busError } = await supabase
+          .from('buses')
+          .select('id, status, driver_id')
+          .eq('id', selectedBusId)
+          .single();
+
+        if (busError) {
+          console.log('⚠️ Error checking bus status:', busError);
+          // If bus not found, driver went off duty
+          if (busError.code === 'PGRST116') {
+            console.log('🚫 Bus not found - driver went off duty');
+            setSelectedBusId(null);
+            setShowPingModal(false);
+            return;
+          }
+        }
+
+        if (busData) {
+          // Check if bus has active driver
+          const hasActiveDriver = busData.driver_id && busData.status === 'active';
+          
+          if (!hasActiveDriver) {
+            console.log('🚫 Polling check: Driver is off duty - hiding modal', {
+              busId: selectedBusId,
+              driver_id: busData.driver_id,
+              status: busData.status
+            });
+            setSelectedBusId(null);
+            setShowPingModal(false);
+            return;
+          }
+
+          // Also check driver status if driver_id exists
+          if (busData.driver_id) {
+            const { data: driverData, error: driverError } = await supabase
+              .from('drivers')
+              .select('id, status')
+              .eq('id', busData.driver_id)
+              .single();
+
+            if (!driverError && driverData) {
+              const driverIsActive = driverData.status === 'active';
+              if (!driverIsActive) {
+                console.log('🚫 Polling check: Driver status is inactive - hiding modal', {
+                  busId: selectedBusId,
+                  driverId: busData.driver_id,
+                  driverStatus: driverData.status
+                });
+                setSelectedBusId(null);
+                setShowPingModal(false);
+                return;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error in polling check:', error);
+      }
+    };
+
+    // Check immediately
+    checkBusAndDriverStatus();
+
+    // Then check every 1 second for faster detection
+    const interval = setInterval(checkBusAndDriverStatus, 1000);
+
+    return () => {
+      console.log('⏱️ Stopping polling check for bus:', selectedBusId);
+      clearInterval(interval);
+    };
+  }, [selectedBusId]);
+
+  // Direct Supabase subscription for selected bus to catch status changes immediately
+  useEffect(() => {
+    if (!selectedBusId) return;
+
+    console.log('🔔 Setting up direct subscription for selected bus:', selectedBusId);
+    
+    const channel = supabase
+      .channel(`bus-status-${selectedBusId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'buses',
+          filter: `id=eq.${selectedBusId}`,
+        },
+        (payload) => {
+          console.log('📡 Direct bus status update received:', payload);
+          const updatedBus = payload.new;
+          
+          // Check if driver went off duty
+          const hasActiveDriver = updatedBus.driver_id && updatedBus.status === 'active';
+          
+          if (!hasActiveDriver) {
+            console.log('🚫 Direct subscription: Driver went off duty - hiding modal immediately', {
+              busId: selectedBusId,
+              driver_id: updatedBus.driver_id,
+              status: updatedBus.status
+            });
+            setSelectedBusId(null);
+            setShowPingModal(false);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔕 Cleaning up direct subscription for bus:', selectedBusId);
+      supabase.removeChannel(channel);
+    };
+  }, [selectedBusId]);
+
+  // Polling mechanism as fallback - check bus and driver status every 1 second
+  useEffect(() => {
+    if (!selectedBusId) return;
+
+    console.log('⏱️ Starting polling check for selected bus:', selectedBusId);
+    
+    const checkBusAndDriverStatus = async () => {
+      try {
+        // Query bus status directly from database
+        const { data: busData, error: busError } = await supabase
+          .from('buses')
+          .select('id, status, driver_id')
+          .eq('id', selectedBusId)
+          .single();
+
+        if (busError) {
+          console.log('⚠️ Error checking bus status:', busError);
+          // If bus not found, driver went off duty
+          if (busError.code === 'PGRST116') {
+            console.log('🚫 Bus not found - driver went off duty');
+            setSelectedBusId(null);
+            setShowPingModal(false);
+            return;
+          }
+        }
+
+        if (busData) {
+          // Check if bus has active driver
+          const hasActiveDriver = busData.driver_id && busData.status === 'active';
+          
+          if (!hasActiveDriver) {
+            console.log('🚫 Polling check: Driver is off duty - hiding modal', {
+              busId: selectedBusId,
+              driver_id: busData.driver_id,
+              status: busData.status
+            });
+            setSelectedBusId(null);
+            setShowPingModal(false);
+            return;
+          }
+
+          // Also check driver status if driver_id exists
+          if (busData.driver_id) {
+            const { data: driverData, error: driverError } = await supabase
+              .from('drivers')
+              .select('id, status')
+              .eq('id', busData.driver_id)
+              .single();
+
+            if (!driverError && driverData) {
+              const driverIsActive = driverData.status === 'active';
+              if (!driverIsActive) {
+                console.log('🚫 Polling check: Driver status is inactive - hiding modal', {
+                  busId: selectedBusId,
+                  driverId: busData.driver_id,
+                  driverStatus: driverData.status
+                });
+                setSelectedBusId(null);
+                setShowPingModal(false);
+                return;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error in polling check:', error);
+      }
+    };
+
+    // Check immediately
+    checkBusAndDriverStatus();
+
+    // Then check every 1 second for faster detection
+    const interval = setInterval(checkBusAndDriverStatus, 1000);
+
+    return () => {
+      console.log('⏱️ Stopping polling check for bus:', selectedBusId);
+      clearInterval(interval);
+    };
+  }, [selectedBusId]);
+
   // Focus on selected bus when mapBuses are loaded
   // This is now handled by RealtimeBusMap component
   useEffect(() => {
@@ -128,16 +417,30 @@ export default function MapScreen({ navigation, route }) {
         const prevMap = new Map(prevMapBuses.map(b => [b.id, b]));
         
         // CRITICAL: Also remove buses from prevMapBuses that are no longer in the buses array
+        // OR that no longer have active drivers (driver went off duty)
         // This ensures buses disappear immediately when drivers go off duty
         const activeBusIds = new Set(buses.map(b => b.id));
         const busesToKeep = prevMapBuses.filter(bus => {
-          // Keep bus if it's in the new active buses list
-          if (activeBusIds.has(bus.id)) {
-            return true;
+          // Check if bus is still in context
+          if (!activeBusIds.has(bus.id)) {
+            // Remove bus if it's no longer in the context buses
+            console.log('🚫 Removing bus from MapScreen - no longer in context:', bus.id);
+            return false;
           }
-          // Remove bus if it's no longer in the context buses (driver went off duty)
-          console.log('🚫 Removing bus from MapScreen - no longer in context (driver off duty):', bus.id);
-          return false;
+          
+          // CRITICAL: Also check if the bus in context still has an active driver
+          // Even if bus is in context, it might have an inactive driver now
+          const contextBus = buses.find(b => b.id === bus.id);
+          if (contextBus) {
+            const hasActiveDriver = contextBus.driver_id && contextBus.status === 'active';
+            if (!hasActiveDriver) {
+              console.log('🚫 Removing bus from MapScreen - driver is off duty:', bus.id, 'driver_id:', contextBus.driver_id, 'status:', contextBus.status);
+              return false;
+            }
+          }
+          
+          // Keep bus only if it's in context AND has an active driver
+          return true;
         });
         
         const transformedBuses = buses.map(bus => {
@@ -166,8 +469,7 @@ export default function MapScreen({ navigation, route }) {
           let lat = bus.latitude;
           let lng = bus.longitude;
           
-          // CRITICAL FIX: If new data has no coordinates, preserve existing coordinates from previous state
-          // This prevents buses from snapping back to user location or placeholder
+  
           if (!hasValidCoordinates) {
             const prevBus = prevMap.get(bus.id);
             if (prevBus && typeof prevBus.latitude === 'number' && typeof prevBus.longitude === 'number') {
@@ -325,9 +627,78 @@ export default function MapScreen({ navigation, route }) {
   const handleBusSelect = (bus) => {
     const busId = bus?.id || bus?.bus_id;
     if (busId) {
-      setSelectedBusId(busId);
+      // Check if bus has active driver before allowing selection
+      const selectedBus = buses.find(b => b.id === busId);
+      const hasActiveDriver = selectedBus?.driver_id && selectedBus?.status === 'active';
+      if (hasActiveDriver) {
+        setSelectedBusId(busId);
+      } else {
+        // Driver is off duty, don't allow selection
+        console.log('🚫 Cannot select bus - driver is off duty:', busId);
+        setSelectedBusId(null);
+      }
     }
   };
+
+  // Check if selected bus has an active driver
+  const getSelectedBusDriverStatus = () => {
+    if (!selectedBusId) return null;
+    
+    // Check both buses array (from context) and mapBuses array (displayed on map)
+    const selectedBus = buses.find(b => b.id === selectedBusId);
+    const selectedMapBus = mapBuses.find(b => (b.id || b.bus_id) === selectedBusId);
+    
+    // If bus is not found in either array, driver went off duty
+    if (!selectedBus && !selectedMapBus) {
+      return {
+        hasActiveDriver: false,
+        bus: null
+      };
+    }
+    
+    // Check status from buses array (primary source)
+    if (selectedBus) {
+      const hasActiveDriver = selectedBus.driver_id && selectedBus.status === 'active';
+      return {
+        hasActiveDriver,
+        bus: selectedBus
+      };
+    }
+    
+    // Fallback: check mapBuses if bus not in context buses array
+    // This handles cases where bus might still be in mapBuses but removed from context
+    if (selectedMapBus) {
+      // If bus is in mapBuses but not in buses, it means it was removed (driver off duty)
+      // But also check if the mapBus itself indicates inactive status
+      return {
+        hasActiveDriver: false, // If not in buses array, driver is off duty
+        bus: selectedMapBus
+      };
+    }
+    
+    return {
+      hasActiveDriver: false,
+      bus: null
+    };
+  };
+
+  // Auto-clear selection when driver goes off duty - check both buses and mapBuses
+  useEffect(() => {
+    if (!selectedBusId) return;
+    
+    const driverStatus = getSelectedBusDriverStatus();
+    // If bus not found or driver is not active, clear selection immediately
+    if (!driverStatus || !driverStatus.hasActiveDriver) {
+      console.log('🚫 Driver went off duty - clearing bus selection and hiding modal', {
+        selectedBusId,
+        driverStatus,
+        busInContext: !!buses.find(b => b.id === selectedBusId),
+        busInMap: !!mapBuses.find(b => (b.id || b.bus_id) === selectedBusId)
+      });
+      setSelectedBusId(null);
+      setShowPingModal(false);
+    }
+  }, [buses, mapBuses, selectedBusId]);
 
   const handleBusesLoaded = (loadedBuses) => {
     setMapBuses(loadedBuses);
@@ -423,16 +794,6 @@ export default function MapScreen({ navigation, route }) {
 
       {/* Action buttons */}
       <View style={styles.fabGroup}>
-        {/* Refresh Location */}
-        <TouchableOpacity style={styles.fab} onPress={getLocation}>
-          <Ionicons name="refresh" size={20} color="#f59e0b" />
-        </TouchableOpacity>
-        
-        {/* Set Alarm */}
-        <TouchableOpacity style={styles.fab} onPress={() => setShowSetAlarmModal(true)}>
-          <Ionicons name="alarm" size={20} color="#3B82F6" />
-        </TouchableOpacity>
-        
         {/* Clear Selection - only show when bus is selected */}
         {selectedBusId && (
           <TouchableOpacity style={styles.fab} onPress={clearSelection}>
@@ -454,65 +815,92 @@ export default function MapScreen({ navigation, route }) {
         isVisible={showRouteInfoPanel}
       />
 
-      {/* Info card */}
-      <View style={styles.infoCard}>
-        <View style={styles.infoHeader}>
-          <Text style={styles.infoText}>
-            {mapBuses.length} buses • Last update: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
-          </Text>
-          <TouchableOpacity style={styles.refreshButton} onPress={async () => {
-            await refreshData();
-            // Force reload by navigating away and back (if needed)
-            // The RealtimeBusMap component should automatically reload when contextBuses changes
-          }}>
-            <Text style={styles.refreshButtonText}>Refresh</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Info card - Hide when selected bus driver is off duty */}
+      {(() => {
+        const driverStatus = getSelectedBusDriverStatus();
         
-        <View style={styles.statusLegend}>
-          <View style={styles.statusItem}>
-            <View style={[styles.statusDot, { backgroundColor: '#4CAF50' }]} />
-            <Text style={styles.statusText}>Live</Text>
-          </View>
-          <View style={styles.statusItem}>
-            <View style={[styles.statusDot, { backgroundColor: '#FF9800' }]} />
-            <Text style={styles.statusText}>Crowded</Text>
-          </View>
-          <View style={styles.statusItem}>
-            <View style={[styles.statusDot, { backgroundColor: '#F44336' }]} />
-            <Text style={styles.statusText}>Full</Text>
-          </View>
-        </View>
+        // If bus is selected but driver is off duty (or bus was removed), don't show modal
+        if (selectedBusId && (!driverStatus || !driverStatus.hasActiveDriver)) {
+          return null;
+        }
         
-        {selectedBusId && (
-          <View style={styles.selectedBusContainer}>
-            <View style={styles.selectedBusInfo}>
-              <Ionicons name="radio-button-on" size={18} color="#f59e0b" />
-              <Text style={styles.selectedBusText}>
-                Bus {mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_number 
-                  || mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_name 
-                  || 'Unknown'} Selected
-              </Text>
-            </View>
-            <View style={styles.busActionButtons}>
+        return (
+          <View style={styles.infoCard}>
+            <View style={styles.infoHeader}>
+              <View style={styles.infoHeaderLeft}>
+                <Text style={styles.infoText}>
+                  {mapBuses.length} buses • Last update: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
+                </Text>
+              </View>
               <TouchableOpacity 
-                style={styles.pingButton}
-                onPress={() => setShowPingModal(true)}
+                style={styles.refreshButton} 
+                onPress={async () => {
+                  try {
+                    // Refresh data from Supabase context
+                    await refreshData();
+                    // Force reload buses by calling loadBuses
+                    await loadBuses();
+                    // The RealtimeBusMap component will automatically update when buses change
+                  } catch (error) {
+                    console.error('Error refreshing bus data:', error);
+                  }
+                }}
               >
-                <Ionicons name="notifications-outline" size={16} color="#007AFF" />
-                <Text style={styles.pingButtonText}>Ping</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.stopTrackingButton}
-                onPress={stopTracking}
-              >
-                <Ionicons name="stop" size={14} color="#f59e0b" />
-                <Text style={styles.stopTrackingText}>Stop</Text>
+                <Ionicons name="refresh" size={16} color="#fff" />
+                <Text style={styles.refreshButtonText}>Refresh</Text>
               </TouchableOpacity>
             </View>
+            
+            <View style={styles.statusLegend}>
+              <View style={styles.statusItem}>
+                <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
+                <Text style={styles.statusText}>Live</Text>
+              </View>
+              <View style={styles.statusItem}>
+                <View style={[styles.statusDot, { backgroundColor: '#F59E0B' }]} />
+                <Text style={styles.statusText}>Crowded</Text>
+              </View>
+              <View style={styles.statusItem}>
+                <View style={[styles.statusDot, { backgroundColor: '#EF4444' }]} />
+                <Text style={styles.statusText}>Full</Text>
+              </View>
+            </View>
+            
+            {selectedBusId && driverStatus && driverStatus.hasActiveDriver && (
+              <View style={styles.selectedBusContainer}>
+                <View style={styles.selectedBusInfo}>
+                  <View style={styles.radioButtonContainer}>
+                    <Ionicons name="radio-button-on" size={20} color="#F4A300" />
+                  </View>
+                  <View style={styles.selectedBusTextContainer}>
+                    <Text style={styles.selectedBusText} numberOfLines={1} ellipsizeMode="tail">
+                      Bus {mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_number 
+                        || mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_name 
+                        || 'Unknown'} Selected
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.busActionButtons}>
+                  <TouchableOpacity 
+                    style={styles.pingButton}
+                    onPress={() => setShowPingModal(true)}
+                  >
+                    <Ionicons name="notifications-outline" size={16} color="#fff" />
+                    <Text style={styles.pingButtonText}>Ping</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.stopTrackingButton}
+                    onPress={stopTracking}
+                  >
+                    <Ionicons name="stop" size={16} color="#fff" />
+                    <Text style={styles.stopTrackingText}>Stop</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
-        )}
-      </View>
+        );
+      })()}
 
       {/* Track Bus Modal */}
       {showTrackModal && trackingBus && (
@@ -631,26 +1019,26 @@ export default function MapScreen({ navigation, route }) {
         </View>
       )}
 
-      {/* Set Alarm Modal */}
-      <SetAlarmModal
-        visible={showSetAlarmModal}
-        onClose={() => setShowSetAlarmModal(false)}
-        userType="passenger"
-        selectedBus={mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId) || null}
-      />
 
-      {/* Ping Modal */}
-      {selectedBusId && (
-        <PingModal
-          visible={showPingModal}
-          onClose={() => setShowPingModal(false)}
-          busId={selectedBusId}
-          busNumber={mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_number 
-            || mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.bus_name}
-          routeNumber={mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_number 
-            || mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_name}
-        />
-      )}
+      {/* Ping Modal - Only show if selected bus has active driver */}
+      {selectedBusId && (() => {
+        const driverStatus = getSelectedBusDriverStatus();
+        // Only show ping modal if driver is on duty
+        if (!driverStatus || !driverStatus.hasActiveDriver) {
+          return null;
+        }
+        return (
+          <PingModal
+            visible={showPingModal}
+            onClose={() => setShowPingModal(false)}
+            busId={selectedBusId}
+            busNumber={mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_number 
+              || mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.bus_name}
+            routeNumber={mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_number 
+              || mapBuses.find(bus => (bus.id || bus.bus_id) === selectedBusId)?.route_name}
+          />
+        );
+      })()}
     </View>
   );
 }
@@ -741,123 +1129,144 @@ const styles = StyleSheet.create({
 
   infoCard: { 
     position: 'absolute', 
-    left: 24, 
-    right: 24, 
-    bottom: 32, 
-    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-    borderRadius: 28, 
-    padding: 24, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 12 }, 
-    shadowOpacity: 0.15, 
-    shadowRadius: 30, 
-    elevation: 16,
+    left: 20, 
+    right: 20, 
+    bottom: 20, 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 24, 
+    padding: 20, 
+    shadowColor: '#000000', 
+    shadowOffset: { width: 0, height: 8 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 24, 
+    elevation: 12,
     zIndex: 999,
-    borderWidth: 2,
-    borderColor: 'rgba(245, 158, 11, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 163, 0, 0.08)',
   },
   infoHeader: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    marginBottom: 12 
+    marginBottom: 16,
+    gap: 12
+  },
+  infoHeaderLeft: {
+    flex: 1,
   },
   infoText: { 
-    fontSize: 15, 
+    fontSize: 14, 
     fontWeight: '600', 
-    color: '#1a1a1a',
-    flex: 1,
-    letterSpacing: -0.2
+    color: '#1F2937',
+    letterSpacing: -0.1,
+    lineHeight: 20
   },
   refreshButton: {
-    backgroundColor: '#10b981',
-    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10B981',
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 16,
-    marginLeft: 12,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    borderRadius: 20,
+    gap: 6,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 6
+    elevation: 4
   },
   refreshButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
-    letterSpacing: 0.3
+    letterSpacing: 0.2
   },
   statusLegend: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     marginBottom: 16,
-    paddingVertical: 12,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 16,
-    marginTop: 8
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 20,
+    marginTop: 4,
+    gap: 8
   },
   statusDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    marginRight: 8
+    marginRight: 6
   },
   selectedBusContainer: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    backgroundColor: '#fff5e6', 
+    backgroundColor: '#FFFBEB', 
     paddingHorizontal: 16, 
-    paddingVertical: 12, 
-    borderRadius: 20, 
+    paddingVertical: 14, 
+    borderRadius: 22, 
     marginTop: 12,
     justifyContent: 'space-between',
-    borderWidth: 2,
-    borderColor: '#ffe4b3',
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+    shadowColor: '#F4A300',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 4
+    elevation: 2,
+    gap: 12
   },
   selectedBusInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1
+    flex: 1,
+    minWidth: 0
+  },
+  radioButtonContainer: {
+    marginRight: 10,
+    flexShrink: 0
+  },
+  selectedBusTextContainer: {
+    flex: 1,
+    minWidth: 0
   },
   selectedBusText: { 
-    marginLeft: 8, 
     fontSize: 15, 
-    fontWeight: '800', 
-    color: '#f59e0b',
-    flex: 1,
-    letterSpacing: -0.2
+    fontWeight: '700', 
+    color: '#F4A300',
+    letterSpacing: -0.2,
+    lineHeight: 20
   },
   stopTrackingButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#f59e0b',
+    backgroundColor: '#F4A300',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 6,
+    shadowColor: '#F4A300',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4
   },
   stopTrackingText: {
-    marginLeft: 4,
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#f59e0b',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
     letterSpacing: 0.2
   },
   statusItem: { 
     flexDirection: 'row', 
-    alignItems: 'center' 
+    alignItems: 'center',
+    gap: 6
   },
   statusText: { 
     fontSize: 13, 
-    color: '#1a1a1a', 
-    fontWeight: '700',
+    color: '#374151', 
+    fontWeight: '600',
     letterSpacing: -0.1
   },
   busMarker: {
@@ -1100,21 +1509,27 @@ const styles = StyleSheet.create({
   pingButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginRight: 8,
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 6,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4
   },
   pingButtonText: {
-    marginLeft: 4,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.2
   },
   busActionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0
   },
 }); 

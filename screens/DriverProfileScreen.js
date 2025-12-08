@@ -8,14 +8,14 @@ import {
   Alert,
   Dimensions,
   ActivityIndicator,
-  Modal,
-  TextInput,
 } from 'react-native';
+import { CommonActions } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSupabase } from '../contexts/SupabaseContext';
 import { useAuth } from '../contexts/AuthContext';
 import { colors, spacing, radius, shadows } from '../styles/uiTheme';
+import NotificationModal from '../components/NotificationModal';
 
 const { width } = Dimensions.get('window');
 
@@ -23,9 +23,14 @@ export default function DriverProfileScreen({ navigation }) {
   const [driver, setDriver] = useState(null);
   const [currentBus, setCurrentBus] = useState(null);
   const [performanceStats, setPerformanceStats] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({});
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [notificationModal, setNotificationModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    buttons: null,
+    type: 'default',
+    icon: null,
+  });
 
   // Get data from Supabase context
   const { 
@@ -37,7 +42,8 @@ export default function DriverProfileScreen({ navigation }) {
     loading, 
     error, 
     refreshData,
-    refreshDriverData 
+    refreshDriverData,
+    endDriverSession
   } = useSupabase();
 
   // Get auth context
@@ -70,12 +76,6 @@ export default function DriverProfileScreen({ navigation }) {
           setDriver(currentDriver);
           
           if (currentDriver) {
-            setEditForm({
-              name: currentDriver.name,
-              phone: currentDriver.phone || '',
-              email: currentDriver.email,
-            });
-            
             // Find assigned bus for this driver
             // CRITICAL: Only find active assignments
             const assignment = driverBusAssignments.find(assignment => 
@@ -170,12 +170,6 @@ export default function DriverProfileScreen({ navigation }) {
           const currentDriver = drivers[0];
           setDriver(currentDriver);
           if (currentDriver) {
-            setEditForm({
-              name: currentDriver.name,
-              phone: currentDriver.phone || '',
-              email: currentDriver.email,
-            });
-            
             // Find assigned bus for this driver
             // CRITICAL: Only find active assignments
             const assignment = driverBusAssignments.find(assignment => 
@@ -214,13 +208,6 @@ export default function DriverProfileScreen({ navigation }) {
         // Fallback to first driver
         const currentDriver = drivers[0];
         setDriver(currentDriver);
-        if (currentDriver) {
-          setEditForm({
-            name: currentDriver.name,
-            phone: currentDriver.phone || '',
-            email: currentDriver.email,
-          });
-        }
       }
     };
 
@@ -285,48 +272,69 @@ export default function DriverProfileScreen({ navigation }) {
     });
   };
 
-  const handleEditProfile = () => {
-    setShowEditModal(true);
-  };
-
-  const handleSaveProfile = () => {
-    // In real app, this would update the database
-    Alert.alert('Profile Updated', 'Your profile has been updated successfully!');
-    setShowEditModal(false);
-    setIsEditing(false);
-  };
-
-  const handleChangePassword = () => {
-    Alert.alert('Change Password', 'Password change feature coming soon!');
-  };
-
   const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    setNotificationModal({
+      visible: true,
+      title: 'Logout',
+      message: 'Are you sure you want to logout?',
+      buttons: [
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null }),
+        },
         { 
           text: 'Logout', 
+          style: 'default',
           onPress: async () => {
+            setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null });
             try {
-              // Clear driver session from AsyncStorage
+              // Get driver session before clearing
+              const sessionData = await AsyncStorage.getItem('driverSession');
+              let sessionId = null;
+              
+              if (sessionData) {
+                const session = JSON.parse(sessionData);
+                sessionId = session?.id;
+              }
+              
+              // End driver session in database if it exists
+              if (sessionId && endDriverSession) {
+                try {
+                  await endDriverSession(sessionId);
+                } catch (sessionError) {
+                  console.warn('⚠️ Failed to end driver session (non-fatal):', sessionError?.message || sessionError);
+                }
+              }
+              
+              // Clear all driver-related data from AsyncStorage
               await AsyncStorage.removeItem('driverSession');
+              await AsyncStorage.removeItem('currentTrip');
+              
               // Sign out from auth context
               await signOut();
+              
+              // App.js will automatically detect the missing session and show login
+              // The useEffect in App.js checks every 2 seconds when in driver mode
             } catch (error) {
               console.error('Error during logout:', error);
-              Alert.alert('Error', 'Failed to logout. Please try again.');
+              setNotificationModal({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to logout. Please try again.',
+                buttons: null,
+                type: 'error',
+                icon: 'alert-circle',
+              });
             }
           }
         }
-      ]
-    );
+      ],
+      type: 'default',
+      icon: null,
+    });
   };
 
-  const handleMenuPress = () => {
-    // Drawer removed
-  };
 
   if (loading) {
     return (
@@ -371,10 +379,8 @@ export default function DriverProfileScreen({ navigation }) {
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color="#374151" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Driver Profile</Text>
-          <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-            <Ionicons name="menu" size={24} color="#374151" />
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Bus Conductor Profile</Text>
+          <View style={styles.placeholder} />
         </View>
       </View>
 
@@ -407,9 +413,6 @@ export default function DriverProfileScreen({ navigation }) {
               </View>
             </View>
           </View>
-          <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
-            <Ionicons name="create-outline" size={20} color={colors.brand} />
-          </TouchableOpacity>
         </View>
 
         {/* Contact Information */}
@@ -501,13 +504,6 @@ export default function DriverProfileScreen({ navigation }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account Settings</Text>
           <View style={styles.actionsList}>
-            <TouchableOpacity style={styles.actionItem} onPress={handleChangePassword}>
-              <View style={styles.actionIconContainer}>
-                <Ionicons name="key" size={20} color={colors.brand} />
-              </View>
-              <Text style={styles.actionText}>Change Password</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
             <TouchableOpacity style={styles.actionItem}>
               <View style={styles.actionIconContainer}>
                 <Ionicons name="notifications" size={20} color={colors.brand} />
@@ -533,59 +529,16 @@ export default function DriverProfileScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* Edit Profile Modal */}
-      <Modal
-        visible={showEditModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowEditModal(false)}>
-              <Text style={styles.modalCancel}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Edit Profile</Text>
-            <TouchableOpacity onPress={handleSaveProfile}>
-              <Text style={styles.modalSave}>Save</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Full Name</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editForm.name}
-                onChangeText={(text) => setEditForm({...editForm, name: text})}
-                placeholder="Enter your full name"
-              />
-            </View>
-            
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Phone Number</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editForm.phone}
-                onChangeText={(text) => setEditForm({...editForm, phone: text})}
-                placeholder="Enter your phone number"
-                keyboardType="phone-pad"
-              />
-            </View>
-            
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editForm.email}
-                onChangeText={(text) => setEditForm({...editForm, email: text})}
-                placeholder="Enter your email address"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
+      {/* Notification Modal */}
+      <NotificationModal
+        visible={notificationModal.visible}
+        title={notificationModal.title}
+        message={notificationModal.message}
+        buttons={notificationModal.buttons}
+        type={notificationModal.type}
+        icon={notificationModal.icon}
+        onPress={() => setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null })}
+      />
     </View>
   );
 }
@@ -624,13 +577,9 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     letterSpacing: -0.5,
   },
-  menuButton: {
+  placeholder: {
     width: 44,
     height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceSubtle,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   content: {
     flex: 1,
@@ -731,16 +680,6 @@ const styles = StyleSheet.create({
   },
   statusTextInactive: {
     color: '#991B1B',
-  },
-  editButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: colors.brandSoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.brandSoftStrong,
   },
   section: {
     marginBottom: spacing.xl,
@@ -949,62 +888,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     fontFamily: 'System',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.xl,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    ...shadows.card,
-  },
-  modalCancel: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    fontWeight: '600',
-    fontFamily: 'System',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    fontFamily: 'System',
-    letterSpacing: -0.3,
-  },
-  modalSave: {
-    fontSize: 16,
-    color: colors.brand,
-    fontWeight: '600',
-    fontFamily: 'System',
-  },
-  modalContent: {
-    flex: 1,
-    padding: spacing.xl,
-  },
-  inputGroup: {
-    marginBottom: spacing.xl,
-  },
-  inputLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.md,
-    fontFamily: 'System',
-  },
-  textInput: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    fontFamily: 'System',
-    color: colors.textPrimary,
   },
 });

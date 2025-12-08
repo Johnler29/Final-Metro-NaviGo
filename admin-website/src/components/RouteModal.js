@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, MapPin, DollarSign, Clock } from 'lucide-react';
+import Modal from './Modal';
 
 const RouteModal = ({ route, onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -59,32 +60,34 @@ const RouteModal = ({ route, onClose, onSave }) => {
     }));
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        {/* Background overlay */}
-        <div 
-          className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
-          onClick={onClose}
-        />
+  const titleId = 'route-modal-title';
 
-        {/* Modal panel */}
-        <div className="inline-block w-full max-w-2xl my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl">
+  return (
+    <Modal
+      onClose={onClose}
+      closeOnBackdrop={true}
+      size="lg"
+      ariaLabelledby={titleId}
+    >
+      {({ close }) => (
+        <>
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <h3 id={titleId} className="text-lg font-semibold text-gray-900">
               {route ? 'Edit Route' : 'Add New Route'}
             </h3>
             <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              type="button"
+              onClick={close}
+              className="inline-flex items-center justify-center rounded-full p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary-500 transition-colors"
+              aria-label="Close route modal"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="px-6 py-4">
+          <form onSubmit={handleSubmit} className="px-6 py-4 md:py-6 overflow-y-auto">
             <div className="space-y-4">
               {/* Route Number and Name */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -99,7 +102,7 @@ const RouteModal = ({ route, onClose, onSave }) => {
                     onChange={handleChange}
                     required
                     placeholder="e.g., R001"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="modern-input w-full"
                   />
                 </div>
 
@@ -114,7 +117,7 @@ const RouteModal = ({ route, onClose, onSave }) => {
                     onChange={handleChange}
                     required
                     placeholder="e.g., Dasmarinas to Alabang"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="modern-input w-full"
                   />
                 </div>
               </div>
@@ -130,7 +133,7 @@ const RouteModal = ({ route, onClose, onSave }) => {
                   onChange={handleChange}
                   rows={3}
                   placeholder="Route description..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="modern-input w-full"
                 />
               </div>
 
@@ -147,7 +150,7 @@ const RouteModal = ({ route, onClose, onSave }) => {
                     value={formData.origin}
                     onChange={handleChange}
                     placeholder="e.g., Dasmarinas City, Cavite"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="modern-input w-full"
                   />
                 </div>
 
@@ -162,7 +165,7 @@ const RouteModal = ({ route, onClose, onSave }) => {
                     value={formData.destination}
                     onChange={handleChange}
                     placeholder="e.g., Alabang, Muntinlupa"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="modern-input w-full"
                   />
                 </div>
               </div>
@@ -182,7 +185,7 @@ const RouteModal = ({ route, onClose, onSave }) => {
                     min="0"
                     step="0.01"
                     placeholder="0.00"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="modern-input w-full"
                   />
                 </div>
 
@@ -198,7 +201,7 @@ const RouteModal = ({ route, onClose, onSave }) => {
                     onChange={handleChange}
                     min="0"
                     placeholder="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="modern-input w-full"
                   />
                 </div>
 
@@ -210,7 +213,7 @@ const RouteModal = ({ route, onClose, onSave }) => {
                     name="status"
                     value={formData.status}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="modern-input w-full"
                   >
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
@@ -221,26 +224,26 @@ const RouteModal = ({ route, onClose, onSave }) => {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-end space-x-3 mt-6 pt-6 border-top border-gray-100">
               <button
                 type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                onClick={close}
+                className="modern-button btn-secondary px-4 py-2 text-sm"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 flex items-center space-x-2"
+                className="modern-button px-4 py-2 text-sm flex items-center space-x-2"
               >
                 <Save className="w-4 h-4" />
                 <span>{route ? 'Update Route' : 'Create Route'}</span>
               </button>
             </div>
           </form>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    </Modal>
   );
 };
 

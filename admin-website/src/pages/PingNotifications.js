@@ -179,9 +179,6 @@ const PingNotifications = () => {
   const getTypeColor = (type) => {
     switch (type) {
       case 'ride_request': return 'bg-purple-100 text-purple-800';
-      case 'eta_request': return 'bg-indigo-100 text-indigo-800';
-      case 'location_request': return 'bg-teal-100 text-teal-800';
-      case 'general_message': return 'bg-gray-100 text-gray-800';
       case 'emergency': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -225,11 +222,11 @@ const PingNotifications = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight flex items-center gap-3">
             <Bell className="w-8 h-8 text-amber-500" />
             Ping Notifications
           </h1>
@@ -300,9 +297,6 @@ const PingNotifications = () => {
           >
             <option value="all">All Types</option>
             <option value="ride_request">Ride Request</option>
-            <option value="eta_request">ETA Request</option>
-            <option value="location_request">Location Request</option>
-            <option value="general_message">General Message</option>
             <option value="emergency">Emergency</option>
           </select>
         </div>

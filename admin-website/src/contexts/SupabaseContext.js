@@ -194,7 +194,15 @@ export const SupabaseProvider = ({ children }) => {
             }
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Users real-time subscription active');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('❌ Users subscription error - check RLS policies');
+          } else {
+            console.log('🔄 Users subscription status:', status);
+          }
+        });
       subscriptions.push(usersSubscription);
 
       // Feedback subscription
@@ -230,6 +238,10 @@ export const SupabaseProvider = ({ children }) => {
     return unsubscribe;
   }, []);
 
+  // Note: Mobile app users are automatically created in the users table when they sign up
+  // The real-time subscription will pick them up automatically
+  // This function ensures we're fetching all users correctly
+
   // Load initial data
   useEffect(() => {
     const loadData = async () => {
@@ -237,6 +249,8 @@ export const SupabaseProvider = ({ children }) => {
         setLoading(true);
         
         // Load all data in parallel
+        // Note: Mobile app users are already in the users table (created during signup)
+        // We fetch all users regardless of how they were created
         const [busesResult, routesResult, driversResult, schedulesResult, stopsResult, usersResult, feedbackResult] = await Promise.all([
           supabase.from('buses').select('*').order('created_at', { ascending: false }),
           supabase.from('routes').select('*').order('created_at', { ascending: false }),
@@ -247,20 +261,50 @@ export const SupabaseProvider = ({ children }) => {
           supabase.from('feedback').select('*').order('created_at', { ascending: false })
         ]);
 
-        if (busesResult.error) throw busesResult.error;
-        if (routesResult.error) throw routesResult.error;
-        if (driversResult.error) throw driversResult.error;
-        if (schedulesResult.error) throw schedulesResult.error;
-        if (stopsResult.error) throw stopsResult.error;
-        if (usersResult.error) throw usersResult.error;
-        if (feedbackResult.error) throw feedbackResult.error;
+        if (busesResult.error) {
+          console.error('Error loading buses:', busesResult.error);
+          throw busesResult.error;
+        }
+        if (routesResult.error) {
+          console.error('Error loading routes:', routesResult.error);
+          throw routesResult.error;
+        }
+        if (driversResult.error) {
+          console.error('Error loading drivers:', driversResult.error);
+          throw driversResult.error;
+        }
+        if (schedulesResult.error) {
+          console.error('Error loading schedules:', schedulesResult.error);
+          throw schedulesResult.error;
+        }
+        if (stopsResult.error) {
+          console.error('Error loading stops:', stopsResult.error);
+          throw stopsResult.error;
+        }
+        if (usersResult.error) {
+          console.error('❌ Error loading users:', usersResult.error);
+          console.error('Error details:', {
+            message: usersResult.error.message,
+            code: usersResult.error.code,
+            details: usersResult.error.details,
+            hint: usersResult.error.hint
+          });
+          // Don't throw - set empty array so app doesn't crash
+          setUsers([]);
+        } else {
+          console.log('✅ Users loaded successfully:', usersResult.data?.length || 0, 'users');
+          setUsers(usersResult.data || []);
+        }
+        if (feedbackResult.error) {
+          console.error('Error loading feedback:', feedbackResult.error);
+          throw feedbackResult.error;
+        }
 
         setBuses(busesResult.data || []);
         setRoutes(routesResult.data || []);
         setDrivers(driversResult.data || []);
         setSchedules(schedulesResult.data || []);
         setStops(stopsResult.data || []);
-        setUsers(usersResult.data || []);
         setFeedback(feedbackResult.data || []);
         
       } catch (error) {
@@ -672,6 +716,114 @@ export const SupabaseProvider = ({ children }) => {
     }
   };
 
+  // Create admin account with authentication
+  const createAdminAccount = async (adminData) => {
+    try {
+      // First, create the Supabase Auth user using signUp
+      // Note: This requires email confirmation unless auto-confirm is enabled in Supabase settings
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: adminData.email,
+        password: adminData.password,
+        options: {
+          data: {
+            first_name: adminData.firstName,
+            last_name: adminData.lastName,
+            role: adminData.role || 'admin'
+          },
+          email_redirect_to: undefined // No redirect needed for admin creation
+        }
+      });
+
+      if (authError) {
+        // If user already exists, check if they're already an admin
+        if (authError.message.includes('already registered') || authError.message.includes('already exists')) {
+          // Check if admin_users record exists
+          const { data: existingAdmin } = await supabase
+            .from('admin_users')
+            .select('*')
+            .eq('email', adminData.email)
+            .single();
+          
+          if (existingAdmin) {
+            throw new Error('An admin user with this email already exists');
+          } else {
+            // User exists in auth but not in admin_users - we can't create them as admin from client
+            throw new Error('A user with this email already exists. Please contact a super admin to grant admin access.');
+          }
+        }
+        throw authError;
+      }
+
+      if (!authData.user) {
+        throw new Error('Failed to create admin user in authentication system');
+      }
+
+      // Then create the admin_users record
+      // The trigger handle_new_admin_user should create this automatically, but we'll also do it manually
+      // to ensure all fields are set correctly
+      const { data: adminUserData, error: adminError } = await supabase
+        .from('admin_users')
+        .insert([{
+          id: authData.user.id,
+          email: adminData.email,
+          first_name: adminData.firstName,
+          last_name: adminData.lastName,
+          role: adminData.role || 'admin',
+          department: adminData.department || null,
+          phone: adminData.phone || null,
+          is_active: true
+        }])
+        .select()
+        .single();
+
+      if (adminError) {
+        // If admin_users insert fails due to duplicate (trigger already created it), fetch the existing record
+        if (adminError.code === '23505' || adminError.message.includes('duplicate') || adminError.message.includes('unique')) {
+          const { data: existingAdmin } = await supabase
+            .from('admin_users')
+            .select('*')
+            .eq('id', authData.user.id)
+            .single();
+          
+          if (existingAdmin) {
+            // Update the existing record with additional fields
+            const { data: updatedAdmin, error: updateError } = await supabase
+              .from('admin_users')
+              .update({
+                department: adminData.department || null,
+                phone: adminData.phone || null,
+                role: adminData.role || 'admin'
+              })
+              .eq('id', authData.user.id)
+              .select()
+              .single();
+            
+            if (updateError) {
+              console.error('Error updating admin_users record:', updateError);
+            }
+            
+            return {
+              success: true,
+              admin: updatedAdmin || existingAdmin,
+              message: 'Admin account created successfully (profile updated)'
+            };
+          }
+        }
+        console.error('Error creating admin_users record:', adminError);
+        throw new Error(`Failed to create admin profile: ${adminError.message}`);
+      }
+
+      return {
+        success: true,
+        admin: adminUserData,
+        message: 'Admin account created successfully. The new admin will need to confirm their email before logging in.'
+      };
+    } catch (error) {
+      console.error('Error creating admin account:', error);
+      throw error;
+    }
+  };
+
   const updateDriver = async (id, updates) => {
     const { data, error } = await supabase
       .from('drivers')
@@ -921,7 +1073,8 @@ export const SupabaseProvider = ({ children }) => {
     getUserStatistics,
     getDriversWithAuth,
     updateDriverStatus,
-    deleteDriverAccount
+    deleteDriverAccount,
+    createAdminAccount
   };
 
   return (

@@ -7,39 +7,132 @@ import {
   ScrollView,
   Alert,
   Image,
+  Modal,
+  TextInput,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabase } from '../contexts/SupabaseContext';
+import { supabase } from '../lib/supabase';
 import { colors, spacing, radius, shadows } from '../styles/uiTheme';
+import NotificationModal from '../components/NotificationModal';
 
 export default function ProfileScreen({ navigation }) {
   const { user, signOut } = useAuth();
   const { buses, routes } = useSupabase();
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editForm, setEditForm] = useState({
+    fullName: '',
+    phone: '',
+  });
+  const [notificationModal, setNotificationModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    buttons: null,
+    type: 'default',
+    icon: null,
+  });
 
   const handleSignOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    setNotificationModal({
+      visible: true,
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out?',
+      buttons: [
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null }),
+        },
         {
           text: 'Sign Out',
-          style: 'destructive',
+          style: 'default',
           onPress: async () => {
+            setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null });
             try {
               await signOut();
             } catch (error) {
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
+              setNotificationModal({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to sign out. Please try again.',
+                buttons: null,
+                type: 'error',
+                icon: 'alert-circle',
+              });
             }
           },
         },
-      ]
-    );
+      ],
+      type: 'default',
+      icon: null,
+    });
   };
 
   const handleEditProfile = () => {
-    Alert.alert('Edit Profile', 'Profile editing coming soon!');
+    // Initialize form with current user data
+    setEditForm({
+      fullName: user?.user_metadata?.full_name || '',
+      phone: user?.user_metadata?.phone || '',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!user) {
+      Alert.alert('Error', 'User not found. Please try again.');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      // Update user metadata in Supabase
+      const { data, error } = await supabase.auth.updateUser({
+        data: {
+          full_name: editForm.fullName.trim(),
+          phone: editForm.phone.trim(),
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setNotificationModal({
+        visible: true,
+        title: 'Success',
+        message: 'Profile updated successfully!',
+        buttons: [
+          {
+            text: 'OK',
+            onPress: () => {
+              setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null });
+              setShowEditModal(false);
+              // The user object will be updated automatically via auth state change
+            },
+          },
+        ],
+        type: 'success',
+        icon: 'checkmark-circle',
+      });
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setNotificationModal({
+        visible: true,
+        title: 'Error',
+        message: error.message || 'Failed to update profile. Please try again.',
+        buttons: null,
+        type: 'error',
+        icon: 'alert-circle',
+      });
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleSettings = () => {
@@ -69,7 +162,7 @@ export default function ProfileScreen({ navigation }) {
       title: 'About',
       icon: 'information-circle-outline',
       color: colors.textSecondary,
-      onPress: () => Alert.alert('About', 'Metro NaviGo v1.0.0\nPublic Transit App'),
+      onPress: () => Alert.alert('About', 'NaviGO v1.0.0\nPublic Transit App'),
     },
   ];
 
@@ -183,6 +276,89 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.versionText}>Version 1.0.0</Text>
         </View>
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContainer}
+        >
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              onPress={() => setShowEditModal(false)}
+              disabled={isUpdating}
+            >
+              <Text style={styles.modalCancel}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+            <TouchableOpacity
+              onPress={handleUpdateProfile}
+              disabled={isUpdating}
+            >
+              {isUpdating ? (
+                <ActivityIndicator size="small" color={colors.brand} />
+              ) : (
+                <Text style={styles.modalSave}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Full Name</Text>
+              <TextInput
+                style={styles.textInput}
+                value={editForm.fullName}
+                onChangeText={(text) => setEditForm({ ...editForm, fullName: text })}
+                placeholder="Enter your full name"
+                placeholderTextColor={colors.textMuted}
+                editable={!isUpdating}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email</Text>
+              <TextInput
+                style={[styles.textInput, styles.disabledInput]}
+                value={user?.email || ''}
+                placeholder="Email cannot be changed"
+                placeholderTextColor={colors.textMuted}
+                editable={false}
+              />
+              <Text style={styles.inputHint}>Email cannot be changed</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <TextInput
+                style={styles.textInput}
+                value={editForm.phone}
+                onChangeText={(text) => setEditForm({ ...editForm, phone: text })}
+                placeholder="Enter your phone number"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="phone-pad"
+                editable={!isUpdating}
+              />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Notification Modal */}
+      <NotificationModal
+        visible={notificationModal.visible}
+        title={notificationModal.title}
+        message={notificationModal.message}
+        buttons={notificationModal.buttons}
+        type={notificationModal.type}
+        icon={notificationModal.icon}
+        onPress={() => setNotificationModal({ visible: false, title: '', message: '', buttons: null, type: 'default', icon: null })}
+      />
     </View>
   );
 }
@@ -411,6 +587,74 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     fontWeight: '500',
+    fontFamily: 'System',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.xl,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
+    ...shadows.card,
+    paddingTop: Platform.OS === 'ios' ? 60 : spacing.xl,
+  },
+  modalCancel: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    fontFamily: 'System',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    fontFamily: 'System',
+    letterSpacing: -0.3,
+  },
+  modalSave: {
+    fontSize: 16,
+    color: colors.brand,
+    fontWeight: '600',
+    fontFamily: 'System',
+  },
+  modalContent: {
+    flex: 1,
+    padding: spacing.xl,
+  },
+  inputGroup: {
+    marginBottom: spacing.xl,
+  },
+  inputLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: spacing.md,
+    fontFamily: 'System',
+  },
+  textInput: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    fontFamily: 'System',
+    color: colors.textPrimary,
+  },
+  disabledInput: {
+    backgroundColor: colors.surfaceSubtle,
+    color: colors.textSecondary,
+  },
+  inputHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
     fontFamily: 'System',
   },
 });

@@ -51,33 +51,35 @@ const RecentActivity = () => {
   ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 8);
 
   return (
-    <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden h-full
-                    hover:shadow-2xl transition-shadow duration-300">
-      <div className="px-8 py-6 bg-gray-50 border-b border-gray-100">
-        <h2 className="text-xl font-bold text-gray-900 flex items-center">
-          <div className="p-2 bg-primary-100 rounded-xl mr-3">
+    <div className="bg-white rounded-[22px] border border-gray-200 overflow-hidden h-full
+                    shadow-[0_2px_8px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]
+                    hover:shadow-[0_4px_12px_rgba(0,0,0,0.08),0_2px_4px_rgba(0,0,0,0.04)]
+                    transition-shadow duration-200 flex flex-col">
+      <div className="px-4 md:px-6 py-4 md:py-5 bg-gray-50 border-b border-gray-200">
+        <h2 className="text-lg md:text-xl font-bold text-gray-900 flex items-center">
+          <div className="p-2 bg-primary-50 rounded-lg mr-3 flex-shrink-0">
             <AlertCircle className="w-5 h-5 text-primary-600" />
           </div>
           Recent Activity
         </h2>
       </div>
-      <div className="p-6 max-h-[600px] overflow-y-auto">
+      <div className="p-4 md:p-6 flex-1 overflow-y-auto max-h-[600px]">
         <div className="space-y-3">
           {activities.length > 0 ? (
             activities.map((activity) => {
               const Icon = activity.icon;
               return (
                 <div key={activity.id} 
-                     className="group flex items-start space-x-4 p-4 rounded-2xl 
-                              hover:bg-gray-50 transition-all duration-300 cursor-pointer
-                              border border-transparent hover:border-gray-200 hover:shadow-md">
-                  <div className={`p-3 rounded-2xl ${activity.bgColor} 
-                                 group-hover:scale-110 transition-transform duration-300
-                                 shadow-lg`}>
-                    <Icon className={`w-5 h-5 ${activity.color}`} />
+                     className="group flex items-start gap-3 p-3 md:p-4 rounded-xl 
+                              hover:bg-gray-50 transition-all duration-200 cursor-pointer
+                              border border-transparent hover:border-gray-200">
+                  <div className={`p-2.5 md:p-3 rounded-lg ${activity.bgColor} 
+                                 flex-shrink-0 transition-transform duration-200
+                                 group-hover:scale-105`}>
+                    <Icon className={`w-4 h-4 md:w-5 md:h-5 ${activity.color}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 mb-1">
+                    <p className="text-sm font-semibold text-gray-900 mb-1 leading-tight">
                       {activity.title}
                     </p>
                     <p className="text-xs text-gray-600 truncate mb-2">
@@ -87,20 +89,13 @@ const RecentActivity = () => {
                       {formatDistanceToNow(new Date(activity.time), { addSuffix: true })}
                     </p>
                   </div>
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center">
-                      <svg className="w-3 h-3 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </div>
                 </div>
               );
             })
           ) : (
-            <div className="text-center py-12">
-              <div className="bg-gray-100 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <AlertCircle className="w-8 h-8 text-gray-400" />
+            <div className="text-center py-8 md:py-12">
+              <div className="bg-gray-100 w-12 h-12 md:w-16 md:h-16 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-6 h-6 md:w-8 md:h-8 text-gray-400" />
               </div>
               <p className="text-sm font-semibold text-gray-500">No recent activity</p>
               <p className="text-xs text-gray-400 mt-1">Activity will appear here as it happens</p>

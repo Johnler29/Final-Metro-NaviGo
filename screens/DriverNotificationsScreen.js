@@ -87,7 +87,7 @@ export default function DriverNotificationsScreen({ navigation }) {
       id: '6',
       type: 'system',
       title: 'App Update',
-      message: 'New features available in the driver app. Update to version 2.1.0 for the latest improvements.',
+      message: 'New features available in the bus conductor app. Update to version 2.1.0 for the latest improvements.',
       timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
       isRead: true,
       isUrgent: false,

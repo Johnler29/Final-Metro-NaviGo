@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Metro Link Tracker",
+    "name": "NaviGO",
     "slug": "metrobustracker",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -21,8 +21,8 @@
         "googleMapsApiKey": "AIzaSyAtz31ET-f9agUbnJuR-tR35Gk8GdsTRic"
       },
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Allow Metro Link Tracker to use your location to show nearby buses, stops, and navigation while the app is in use.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Metro Link Tracker to access your location in the background so your bus can be tracked in real time even when the app is minimized.",
+        "NSLocationWhenInUseUsageDescription": "Allow NaviGO to use your location to show nearby buses, stops, and navigation while the app is in use.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow NaviGO to access your location in the background so your bus can be tracked in real time even when the app is minimized.",
         "UIBackgroundModes": [
           "location"
         ]
@@ -59,7 +59,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Metro Link Tracker to use your location to show nearby buses and stops."
+          "locationAlwaysAndWhenInUsePermission": "Allow NaviGO to use your location to show nearby buses and stops."
         }
       ],
       "expo-font",

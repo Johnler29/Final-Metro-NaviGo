@@ -443,6 +443,43 @@ function AppContent() {
   const [driverAuthenticated, setDriverAuthenticated] = useState(false);
   const navigationRef = React.useRef(null);
 
+  // Check driver authentication on mount and when role changes
+  useEffect(() => {
+    if (currentRole === 'driver') {
+      checkDriverAuth();
+    }
+  }, [currentRole]);
+
+  // Also check periodically when in driver mode
+  useEffect(() => {
+    if (currentRole === 'driver' && driverAuthenticated) {
+      const interval = setInterval(() => {
+        checkDriverAuth();
+      }, 2000); // Check every 2 seconds
+      return () => clearInterval(interval);
+    }
+  }, [currentRole, driverAuthenticated]);
+
+  const checkDriverAuth = async () => {
+    try {
+      const driverSession = await AsyncStorage.getItem('driverSession');
+      if (!driverSession) {
+        // Session was cleared, update state to show login
+        setDriverAuthenticated(false);
+      } else {
+        const session = JSON.parse(driverSession);
+        if (session.driver_id) {
+          setDriverAuthenticated(true);
+        } else {
+          setDriverAuthenticated(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking driver authentication:', error);
+      setDriverAuthenticated(false);
+    }
+  };
+
   const handleRoleChange = (newRole) => {
     setCurrentRole(newRole);
     if (newRole === 'driver') {

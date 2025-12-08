@@ -13,12 +13,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSupabase } from '../contexts/SupabaseContext';
 import * as Location from 'expo-location';
+import NotificationModal from './NotificationModal';
 
 const PING_TYPES = [
   { value: 'ride_request', label: 'Request Pickup', icon: 'car-outline' },
-  { value: 'eta_request', label: 'Ask for ETA', icon: 'time-outline' },
-  { value: 'location_request', label: 'Request Location', icon: 'location-outline' },
-  { value: 'general_message', label: 'General Message', icon: 'chatbubble-outline' },
 ];
 
 export default function PingModal({ visible, onClose, busId, busNumber, routeNumber }) {
@@ -28,6 +26,12 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
   const [isLoading, setIsLoading] = useState(false);
   const [pingStatus, setPingStatus] = useState(null);
   const [cooldownTimer, setCooldownTimer] = useState(0);
+  const [notificationModal, setNotificationModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    buttons: null,
+  });
   const [useLocation, setUseLocation] = useState(true);
   const [location, setLocation] = useState(null);
 
@@ -195,22 +199,29 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
       ]);
 
       if (result.success) {
-        Alert.alert(
-          'Success!',
-          result.message || 'Ping sent successfully!',
-          [
+        setNotificationModal({
+          visible: true,
+          title: 'Success!',
+          message: result.message || 'Ping sent successfully!',
+          buttons: [
             {
               text: 'OK',
               onPress: () => {
+                setNotificationModal({ visible: false, title: '', message: '', buttons: null });
                 setMessage('');
                 loadPingStatus();
                 onClose();
               },
             },
-          ]
-        );
+          ],
+        });
       } else {
-        Alert.alert('Error', result.error || 'Failed to send ping');
+        setNotificationModal({
+          visible: true,
+          title: 'Error',
+          message: result.error || 'Failed to send ping',
+          buttons: null,
+        });
         
         // Update cooldown if provided
         if (result.cooldown_remaining) {
@@ -222,7 +233,12 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
       }
     } catch (error) {
       console.error('Error sending ping:', error);
-      Alert.alert('Error', error.message || 'Failed to send ping. Please try again.');
+      setNotificationModal({
+        visible: true,
+        title: 'Error',
+        message: error.message || 'Failed to send ping. Please try again.',
+        buttons: null,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -236,12 +252,13 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
+    <>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={onClose}
+      >
       <View style={styles.overlay}>
         <View style={styles.modalContainer}>
           <View style={styles.header}>
@@ -285,35 +302,6 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
                 )}
               </View>
             )}
-
-            {/* Ping Type Selection */}
-            <Text style={styles.label}>Ping Type</Text>
-            <View style={styles.typeContainer}>
-              {PING_TYPES.map((type) => (
-                <TouchableOpacity
-                  key={type.value}
-                  style={[
-                    styles.typeButton,
-                    selectedType === type.value && styles.typeButtonSelected,
-                  ]}
-                  onPress={() => setSelectedType(type.value)}
-                >
-                  <Ionicons
-                    name={type.icon}
-                    size={20}
-                    color={selectedType === type.value ? '#007AFF' : '#666'}
-                  />
-                  <Text
-                    style={[
-                      styles.typeButtonText,
-                      selectedType === type.value && styles.typeButtonTextSelected,
-                    ]}
-                  >
-                    {type.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
 
             {/* Message Input */}
             <Text style={styles.label}>Message (Optional)</Text>
@@ -381,6 +369,16 @@ export default function PingModal({ visible, onClose, busId, busNumber, routeNum
         </View>
       </View>
     </Modal>
+    
+    {/* Notification Modal */}
+    <NotificationModal
+      visible={notificationModal.visible}
+      title={notificationModal.title}
+      message={notificationModal.message}
+      buttons={notificationModal.buttons}
+      onPress={() => setNotificationModal({ visible: false, title: '', message: '', buttons: null })}
+    />
+    </>
   );
 }
 

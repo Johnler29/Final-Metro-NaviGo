@@ -411,7 +411,8 @@ RETURNS BOOLEAN AS $$
 BEGIN
   UPDATE ping_notifications
   SET status = 'acknowledged',
-      acknowledged_at = NOW()
+      acknowledged_at = NOW(),
+      updated_at = NOW()
   WHERE id = p_ping_id
     AND status = 'pending';
   
@@ -431,7 +432,8 @@ RETURNS BOOLEAN AS $$
 BEGIN
   UPDATE ping_notifications
   SET status = 'completed',
-      completed_at = NOW()
+      completed_at = NOW(),
+      updated_at = NOW()
   WHERE id = p_ping_id
     AND status IN ('pending', 'acknowledged');
   

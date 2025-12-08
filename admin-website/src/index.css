@@ -4,6 +4,13 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
+html {
+  /* Reserve vertical scrollbar space at the root level so layout width
+     stays fixed even when page content height changes after loading */
+  overflow-y: scroll;
+  scrollbar-gutter: stable both-edges;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -178,41 +185,21 @@ code {
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 }
 
-/* Enhanced card styles with depth */
+/* Standardized card styles - Metro NaviGo Design System */
 .modern-card {
   background: #ffffff;
-  border: 1px solid rgba(229, 231, 235, 0.8);
-  border-radius: 16px;
-  box-shadow: 
-    0 1px 3px 0 rgba(0, 0, 0, 0.04),
-    0 0 0 1px rgba(0, 0, 0, 0.02);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid #e5e7eb;
+  border-radius: 22px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
 }
 
-.modern-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: rgba(245, 158, 11, 0.3);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
 .modern-card:hover {
-  box-shadow: 
-    0 10px 25px -5px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  transform: translateY(-4px);
-  border-color: rgba(245, 158, 11, 0.2);
-}
-
-.modern-card:hover::before {
-  opacity: 1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  border-color: #f59e0b;
 }
 
 /* Glass card variant */
@@ -236,65 +223,60 @@ code {
   transform: translateY(-2px);
 }
 
-/* Enhanced button styles */
+/* Unified Button Design System - Metro NaviGo */
 .modern-button {
   background: #f59e0b;
-  color: white;
+  color: #ffffff;
   font-weight: 600;
+  font-size: 0.875rem;
   letter-spacing: 0.01em;
+  line-height: 1.5;
   border: none;
   border-radius: 12px;
-  padding: 0.875rem 1.75rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 
-    0 4px 12px -2px rgba(245, 158, 11, 0.4),
-    0 2px 4px -1px rgba(245, 158, 11, 0.2);
-  position: relative;
-  overflow: hidden;
-}
-
-.modern-button::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.2);
-  transition: left 0.5s ease;
+  padding: 12px 20px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.2);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .modern-button:hover {
   background: #d97706;
-  box-shadow: 
-    0 8px 20px -4px rgba(245, 158, 11, 0.5),
-    0 4px 8px -2px rgba(245, 158, 11, 0.3);
-  transform: translateY(-2px);
-}
-
-.modern-button:hover::before {
-  left: 100%;
+  box-shadow: 0 4px 8px rgba(245, 158, 11, 0.3);
+  transform: translateY(-1px);
 }
 
 .modern-button:active {
   transform: translateY(0);
-  box-shadow: 
-    0 2px 8px -2px rgba(245, 158, 11, 0.4),
-    0 1px 2px -1px rgba(245, 158, 11, 0.2);
+  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.2);
+}
+
+.modern-button:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+.modern-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Button variants */
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.9);
+  background: #ffffff;
   color: #374151;
-  border: 1px solid rgba(229, 231, 235, 0.8);
-  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .btn-secondary:hover {
-  background: #ffffff;
-  border-color: rgba(245, 158, 11, 0.3);
-  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.12);
+  background: #f9fafb;
+  border-color: #f59e0b;
+  color: #1f2937;
 }
 
 .btn-ghost {
@@ -305,7 +287,7 @@ code {
 }
 
 .btn-ghost:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: #f3f4f6;
   color: #374151;
 }
 
@@ -405,7 +387,7 @@ code {
     0 4px 12px -2px rgba(0, 0, 0, 0.1);
 }
 
-/* Solid color backgrounds */
+/* Solid color backgrounds - No gradients */
 .bg-gradient-primary {
   background: #f59e0b;
 }
@@ -427,6 +409,56 @@ code {
   color: #f59e0b;
 }
 
+/* Responsive utilities */
+@media (max-width: 1440px) {
+  .container {
+    max-width: 1280px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .container {
+    max-width: 100%;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  h1 {
+    font-size: 1.75rem;
+  }
+  
+  h2 {
+    font-size: 1.375rem;
+  }
+  
+  .modern-card {
+    padding: 20px;
+    border-radius: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  h1 {
+    font-size: 1.5rem;
+  }
+  
+  h2 {
+    font-size: 1.25rem;
+  }
+  
+  .modern-card {
+    padding: 16px;
+    border-radius: 20px;
+  }
+  
+  .modern-button {
+    padding: 10px 16px;
+    font-size: 0.8125rem;
+  }
+}
+
 /* Enhanced focus states */
 *:focus-visible {
   outline: 2px solid #f59e0b;
@@ -439,16 +471,64 @@ button, a, input, select, textarea {
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Improved typography */
-h1, h2, h3, h4, h5, h6 {
+/* Standardized Typography - Metro NaviGo */
+h1 {
+  font-size: 2rem;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
+  color: #111827;
+}
+
+h2 {
+  font-size: 1.5rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: #111827;
+}
+
+h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+  color: #111827;
+}
+
+h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+  color: #111827;
 }
 
 p {
+  font-size: 0.875rem;
   letter-spacing: -0.01em;
   line-height: 1.6;
+  color: #4b5563;
+}
+
+/* Table typography */
+table {
+  font-size: 0.875rem;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+}
+
+thead th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+tbody td {
+  font-size: 0.875rem;
+  color: #374151;
 }
 
 /* Backdrop blur support */

@@ -37,9 +37,8 @@ export default function DriverMapScreen({ navigation, route }) {
   const locationInterval = useRef(null);     // active 5s polling timer
   const { updateBusLocation, startDriverSession, endDriverSession, getStopsByRoute, routes, buses, driverBusAssignments } = useSupabase();
   
-  // Animation values for card slide-up and button press feedback
+  // Animation values for card slide-up
   const cardSlideAnim = useRef(new Animated.Value(0)).current;
-  const buttonScaleAnim = useRef({ recalc: new Animated.Value(1), info: new Animated.Value(1) }).current;
 
   useEffect(() => {
     getLocation();
@@ -474,53 +473,7 @@ export default function DriverMapScreen({ navigation, route }) {
     setErrorMsg(null);
   };
 
-  const handleRouteDeviation = () => {
-    // Button press animation
-    Animated.sequence([
-      Animated.timing(buttonScaleAnim.recalc, {
-        toValue: 0.95,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(buttonScaleAnim.recalc, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-    ]).start();
-    
-    Alert.alert(
-      'Route Deviation',
-      'You are currently off your assigned route. Would you like to recalculate?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Recalculate', onPress: () => Alert.alert('Recalculating', 'Route is being recalculated...') }
-      ]
-    );
-  };
 
-  const handleInfoPress = () => {
-    // Button press animation
-    Animated.sequence([
-      Animated.timing(buttonScaleAnim.info, {
-        toValue: 0.95,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(buttonScaleAnim.info, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-    ]).start();
-    
-    // Add your info action here
-    Alert.alert('Route Information', 'Detailed route information will be displayed here.');
-  };
-
-  const handleMenuPress = () => {
-    // Drawer removed
-  };
 
   if (isLoading) {
     return (
@@ -616,13 +569,7 @@ export default function DriverMapScreen({ navigation, route }) {
                 </View>
               )}
             </View>
-            <TouchableOpacity 
-              style={styles.menuButton} 
-              onPress={handleMenuPress}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="menu" size={22} color={colors.background} />
-            </TouchableOpacity>
+            <View style={styles.placeholder} />
           </View>
           
           {/* Location Accuracy Indicator - Enhanced */}
@@ -821,30 +768,6 @@ export default function DriverMapScreen({ navigation, route }) {
           </View>
         </View>
 
-        {/* Minimalist Pill Buttons */}
-        <View style={styles.actionButtons}>
-          <Animated.View style={{ transform: [{ scale: buttonScaleAnim.recalc }] }}>
-            <TouchableOpacity 
-              style={styles.actionButtonPrimary} 
-              onPress={handleRouteDeviation}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="refresh" size={16} color={colors.background} />
-              <Text style={styles.actionButtonPrimaryText}>Recalc</Text>
-            </TouchableOpacity>
-          </Animated.View>
-          
-          <Animated.View style={{ transform: [{ scale: buttonScaleAnim.info }] }}>
-            <TouchableOpacity 
-              style={styles.actionButtonSecondary} 
-              onPress={handleInfoPress}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-              <Text style={styles.actionButtonSecondaryText}>Info</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
       </Animated.View>
     </View>
   );
@@ -916,13 +839,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  menuButton: {
+  placeholder: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   accuracyContainer: {
     flexDirection: 'row',
@@ -1103,48 +1022,5 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.sm,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  actionButtonPrimary: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
-    height: 44,
-    backgroundColor: colors.brand,
-    ...shadows.card,
-  },
-  actionButtonPrimaryText: {
-    fontSize: 14,
-    color: colors.background,
-    fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    marginLeft: spacing.xs,
-  },
-  actionButtonSecondary: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
-    height: 44,
-    backgroundColor: colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-  },
-  actionButtonSecondaryText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '500',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    marginLeft: spacing.xs,
   },
 }); 

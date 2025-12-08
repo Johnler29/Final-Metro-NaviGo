@@ -3,6 +3,7 @@ import { useSupabase } from '../contexts/SupabaseContext';
 import { Users, Search, UserCheck, Trash2, Bus, MapPin } from 'lucide-react';
 import { notifications } from '../utils/notifications';
 import Skeleton, { SkeletonTable, SkeletonList } from '../components/Skeleton';
+import Modal from '../components/Modal';
 
 // Cache busting comment - Driver Management v2.0 (Add Driver removed)
 
@@ -179,24 +180,23 @@ const DriverManagement = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-4 md:space-y-6 w-full max-w-full animate-fade-in">
         {/* Header Skeleton */}
-        <div className="modern-card p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <Skeleton variant="title" width="250px" height="32px" className="mb-3" />
-              <Skeleton variant="text" width="400px" className="mb-2" />
-              <Skeleton variant="text" width="350px" />
-            </div>
-            <div className="flex space-x-3">
-              <Skeleton variant="button" width="150px" />
-              <Skeleton variant="button" width="130px" />
-            </div>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex-1">
+            <Skeleton variant="title" width="250px" height="32px" className="mb-2" />
+            <Skeleton variant="text" width="400px" className="mb-1" />
+            <Skeleton variant="text" width="350px" />
+          </div>
+          <div className="flex space-x-3">
+            <Skeleton variant="button" width="150px" />
+            <Skeleton variant="button" width="130px" />
           </div>
         </div>
 
         {/* Stats Skeleton */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
+          <Skeleton variant="card" height="120px" />
           <Skeleton variant="card" height="120px" />
           <Skeleton variant="card" height="120px" />
           <Skeleton variant="card" height="120px" />
@@ -209,77 +209,83 @@ const DriverManagement = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 w-full max-w-full">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Driver Management</h1>
-          <p className="text-gray-600">Manage driver profiles, assignments, and performance</p>
-          <p className="text-sm text-blue-600 mt-1">
-            💡 To add new drivers, go to <strong>User Management</strong> → <strong>Add Driver</strong>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">Bus Conductor Management</h1>
+          <p className="text-sm md:text-base text-gray-600 mt-1">Manage bus conductor profiles, assignments, and performance</p>
+          <p className="text-xs md:text-sm text-blue-600 mt-1">
+            💡 To add new bus conductors, go to <strong>User Management</strong> → <strong>Add Bus Conductor</strong>
           </p>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <button 
             onClick={handleSyncAssignments}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+            className="bg-white text-gray-700 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 
+                     hover:border-primary-500 flex items-center space-x-2 transition-all duration-200 
+                     text-sm md:text-base font-semibold"
           >
             <UserCheck className="w-4 h-4" />
             <span>Sync Assignments</span>
           </button>
           <button 
             onClick={() => setShowAssignDriver(true)}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2"
+            className="bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600 
+                     flex items-center space-x-2 transition-all duration-200 text-sm md:text-base font-semibold
+                     shadow-[0_2px_4px_rgba(245,158,11,0.2)] hover:shadow-[0_4px_8px_rgba(245,158,11,0.3)]"
           >
             <Bus className="w-4 h-4" />
-            <span>Assign Driver</span>
+            <span>Assign Bus Conductor</span>
           </button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
-            <div className="p-2 bg-blue-50 rounded-lg">
+            <div className="p-2 bg-blue-50 rounded-lg flex-shrink-0">
               <Users className="w-6 h-6 text-blue-600" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Drivers</p>
-              <p className="text-2xl font-bold text-gray-900">{safeDrivers.length}</p>
+            <div className="ml-4 min-w-0">
+              <p className="text-xs md:text-sm font-medium text-gray-600">Total Drivers</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">{safeDrivers.length}</p>
             </div>
           </div>
         </div>
         
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
-            <div className="p-2 bg-green-50 rounded-lg">
+            <div className="p-2 bg-green-50 rounded-lg flex-shrink-0">
               <UserCheck className="w-6 h-6 text-green-600" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Active Drivers</p>
-              <p className="text-2xl font-bold text-gray-900">{activeDrivers}</p>
+            <div className="ml-4 min-w-0">
+              <p className="text-xs md:text-sm font-medium text-gray-600">Active Drivers</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">{activeDrivers}</p>
             </div>
-          </div>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="p-2 bg-purple-50 rounded-lg">
-            <Bus className="w-6 h-6 text-purple-600" />
-            </div>
-            <div className="ml-4">
-            <p className="text-sm font-medium text-gray-600">Available Buses</p>
-            <p className="text-2xl font-bold text-gray-900">{availableBuses}</p>
           </div>
         </div>
         
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
-            <div className="p-2 bg-yellow-50 rounded-lg">
+            <div className="p-2 bg-purple-50 rounded-lg flex-shrink-0">
+              <Bus className="w-6 h-6 text-purple-600" />
+            </div>
+            <div className="ml-4 min-w-0">
+              <p className="text-xs md:text-sm font-medium text-gray-600">Available Buses</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">{availableBuses}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <div className="p-2 bg-yellow-50 rounded-lg flex-shrink-0">
               <MapPin className="w-6 h-6 text-yellow-600" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Assignments</p>
-              <p className="text-2xl font-bold text-gray-900">{assignedDrivers}</p>
+            <div className="ml-4 min-w-0">
+              <p className="text-xs md:text-sm font-medium text-gray-600">Total Assignments</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">{assignedDrivers}</p>
             </div>
           </div>
         </div>
@@ -302,13 +308,13 @@ const DriverManagement = () => {
       {/* Drivers Table */}
       <div className="bg-white shadow-sm rounded-lg border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Drivers</h3>
+          <h3 className="text-lg font-medium text-gray-900">Bus Conductors</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Driver</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bus Conductor</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">License</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -331,7 +337,7 @@ const DriverManagement = () => {
                           </span>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{driver.name || 'Unknown Driver'}</div>
+                          <div className="text-sm font-medium text-gray-900">{driver.name || 'Unknown Bus Conductor'}</div>
                           <div className="text-sm text-gray-500">{driver.email || 'No email'}</div>
                         </div>
                       </div>
@@ -348,7 +354,7 @@ const DriverManagement = () => {
                           ? 'bg-purple-100 text-purple-800' 
                           : 'bg-green-100 text-green-800'
                       }`}>
-                        {driver.is_admin ? 'Admin' : 'Driver'}
+                        {driver.is_admin ? 'Admin' : 'Bus Conductor'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -387,66 +393,87 @@ const DriverManagement = () => {
       </div>
 
 
-      {/* Assign Driver Modal */}
+      {/* Assign Bus Conductor Modal */}
       {showAssignDriver && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Assign Driver to Bus</h3>
-            <form onSubmit={handleAssignDriver} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Driver</label>
-                <select
-                  required
-                  value={assignmentForm.driver_id}
-                  onChange={(e) => setAssignmentForm({ ...assignmentForm, driver_id: e.target.value })}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="">Select a driver</option>
-                  {safeDrivers.filter(d => !d.is_admin).map(driver => (
-                    <option key={driver.id} value={driver.id}>
-                      {driver.name} ({driver.email})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Bus ({buses.length} available)
-                </label>
-                <select
-                  required
-                  value={assignmentForm.bus_id}
-                  onChange={(e) => setAssignmentForm({ ...assignmentForm, bus_id: e.target.value })}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="">Select a bus</option>
-                  {buses.length > 0 ? buses.map(bus => (
-                    <option key={bus.id} value={bus.id}>
-                      {bus.bus_number} - {bus.name} {bus.route_id ? `(Route: ${bus.route_id})` : ''}
-                    </option>
-                  )) : (
-                    <option disabled>No buses available</option>
-                  )}
-                </select>
-              </div>
-              <div className="flex justify-end space-x-3">
+        <Modal
+          onClose={() => setShowAssignDriver(false)}
+          closeOnBackdrop={true}
+          size="md"
+          ariaLabelledby="assign-driver-title"
+        >
+          {({ close }) => (
+            <>
+              <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100">
+                <h3 id="assign-driver-title" className="text-lg font-medium text-gray-900">
+                  Assign Bus Conductor to Bus
+                </h3>
                 <button
                   type="button"
-                  onClick={() => setShowAssignDriver(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+                  onClick={close}
+                  className="inline-flex items-center justify-center rounded-full p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary-500 transition-colors"
+                  aria-label="Close assign bus conductor modal"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
-                >
-                  Assign Driver
+                  <span className="text-2xl leading-none">×</span>
                 </button>
               </div>
-            </form>
-        </div>
-      </div>
+              <form onSubmit={handleAssignDriver} className="px-6 py-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bus Conductor</label>
+                  <select
+                    required
+                    value={assignmentForm.driver_id}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, driver_id: e.target.value })}
+                    className="modern-input w-full"
+                  >
+                    <option value="">Select a bus conductor</option>
+                    {safeDrivers.filter(d => !d.is_admin).map(driver => (
+                      <option key={driver.id} value={driver.id}>
+                        {driver.name} ({driver.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Bus ({buses.length} available)
+                  </label>
+                  <select
+                    required
+                    value={assignmentForm.bus_id}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, bus_id: e.target.value })}
+                    className="modern-input w-full"
+                  >
+                    <option value="">Select a bus</option>
+                    {buses.length > 0 ? (
+                      buses.map(bus => (
+                        <option key={bus.id} value={bus.id}>
+                          {bus.bus_number} - {bus.name} {bus.route_id ? `(Route: ${bus.route_id})` : ''}
+                        </option>
+                      ))
+                    ) : (
+                      <option disabled>No buses available</option>
+                    )}
+                  </select>
+                </div>
+                <div className="flex justify-end space-x-3 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={close}
+                    className="modern-button btn-secondary px-4 py-2 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="modern-button px-4 py-2 text-sm"
+                  >
+                    Assign Bus Conductor
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
+        </Modal>
       )}
     </div>
   );

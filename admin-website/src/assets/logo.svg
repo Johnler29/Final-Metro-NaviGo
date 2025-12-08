@@ -1,0 +1,37 @@
+<svg width="200" height="60" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icon: Bus with Navigation Arrow -->
+  <g id="logo-icon">
+    <!-- Navigation Compass Circle -->
+    <circle cx="30" cy="30" r="24" fill="#F59E0B" opacity="0.1"/>
+    <circle cx="30" cy="30" r="20" fill="#F59E0B" opacity="0.15"/>
+    
+    <!-- Bus Body -->
+    <rect x="18" y="22" width="24" height="16" rx="2" fill="#F59E0B"/>
+    <rect x="20" y="24" width="20" height="12" rx="1" fill="#FFFFFF" opacity="0.9"/>
+    
+    <!-- Bus Windows -->
+    <rect x="22" y="26" width="5" height="4" rx="0.5" fill="#F59E0B" opacity="0.3"/>
+    <rect x="28" y="26" width="5" height="4" rx="0.5" fill="#F59E0B" opacity="0.3"/>
+    <rect x="34" y="26" width="5" height="4" rx="0.5" fill="#F59E0B" opacity="0.3"/>
+    
+    <!-- Bus Wheels -->
+    <circle cx="23" cy="40" r="3" fill="#1F2937"/>
+    <circle cx="37" cy="40" r="3" fill="#1F2937"/>
+    <circle cx="23" cy="40" r="1.5" fill="#FFFFFF" opacity="0.3"/>
+    <circle cx="37" cy="40" r="1.5" fill="#FFFFFF" opacity="0.3"/>
+    
+    <!-- Navigation Arrow (Forward Motion) -->
+    <path d="M 38 30 L 48 30 M 45 27 L 48 30 L 45 33" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- GPS/Navigation Indicator Dots -->
+    <circle cx="12" cy="18" r="2" fill="#10B981"/>
+    <circle cx="12" cy="18" r="4" fill="#10B981" opacity="0.2"/>
+  </g>
+  
+  <!-- Text: Navi-GO -->
+  <g id="logo-text">
+    <text x="60" y="25" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="#1F2937">Navi</text>
+    <text x="60" y="45" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="#F59E0B">GO</text>
+  </g>
+</svg>
+

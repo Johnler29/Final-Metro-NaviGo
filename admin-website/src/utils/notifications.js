@@ -78,6 +78,13 @@ export const notifications = {
   userUpdated: () => showSuccess('User information updated successfully!'),
   userDeleted: () => showSuccess('User account deleted successfully!'),
 
+  // Admin operations
+  adminCreated: () => showSuccess('Admin account created successfully!'),
+  adminUpdated: () => showSuccess('Admin information updated successfully!'),
+  adminDeleted: () => showSuccess('Admin account deleted successfully!'),
+  adminActivated: () => showSuccess('Admin activated successfully!'),
+  adminDeactivated: () => showSuccess('Admin deactivated successfully!'),
+
   // Bus operations
   busCreated: () => showSuccess('Bus added to fleet successfully!'),
   busUpdated: () => showSuccess('Bus information updated successfully!'),

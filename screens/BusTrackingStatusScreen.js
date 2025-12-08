@@ -203,16 +203,16 @@ export default function BusTrackingStatusScreen({ navigation }) {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Driver Session Status */}
+        {/* Bus Conductor Session Status */}
         <StatusCard
-          title="Driver Session"
+          title="Bus Conductor Session"
           icon="person-circle"
           color={statusData.driverSession ? '#4CAF50' : '#F44336'}
         >
           {statusData.driverSession ? (
             <>
               <StatusItem label="Session ID" value={statusData.driverSession.id?.substring(0, 8) + '...'} />
-              <StatusItem label="Driver ID" value={statusData.driverSession.driver_id?.substring(0, 8) + '...'} />
+              <StatusItem label="Bus Conductor ID" value={statusData.driverSession.driver_id?.substring(0, 8) + '...'} />
               <StatusItem label="Bus ID" value={statusData.driverSession.bus_id?.substring(0, 8) + '...'} />
               <StatusItem
                 label="Status"
